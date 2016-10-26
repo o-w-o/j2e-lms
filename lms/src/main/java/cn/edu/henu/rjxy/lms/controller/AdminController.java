@@ -10,25 +10,19 @@ import cn.edu.henu.rjxy.lms.dao.TeacherDao;
 import cn.edu.henu.rjxy.lms.dao.TempStudentDao;
 import cn.edu.henu.rjxy.lms.dao.TempTeacherDao;
 import cn.edu.henu.rjxy.lms.model.ManageResult;
-import cn.edu.henu.rjxy.lms.model.PageBean;
 import cn.edu.henu.rjxy.lms.model.Student;
-import cn.edu.henu.rjxy.lms.model.StudentWithoutPwd;
 import cn.edu.henu.rjxy.lms.model.Teacher;
-import cn.edu.henu.rjxy.lms.model.TempTeacherWithoutPwd;
-import java.io.File;
-import java.io.IOException;
+import java.io.UnsupportedEncodingException;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Scanner;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseBody;
-
+import cn.edu.henu.rjxy.lms.server.AuthorityManage;
+import cn.edu.henu.rjxy.lms.server.CurrentInfo;
 /**
  *
  * @author Administrator
@@ -38,15 +32,53 @@ public class AdminController {
 
     @RequestMapping("/admin")
     public String personal_InfInformation(HttpServletRequest request, HttpServletResponse response) {
-	request.setAttribute("username",SecurityContextHolder.getContext().getAuthentication().getName());
         return "admin/Index";
     }
 
     @RequestMapping("/admin/FunctionManage")
     public String functionManage(HttpServletRequest request, HttpServletResponse response) {
+        request.setAttribute("AllTerm", listToString(CurrentInfo.getAllTerm()));
+        request.setAttribute("AllGrade",listToString(CurrentInfo.getAllGrade()));
+        request.setAttribute("AllCollege", listToString(CurrentInfo.getAllCollege()));
+        request.setAttribute("CurrentTerm", CurrentInfo.getCurrentTerm());
+        request.setAttribute("FileFolder", CurrentInfo.getFileFolder());
+        request.setAttribute("Selfverification", CurrentInfo.getOtherConfigure("Selfverification").toLowerCase());
         return "admin/FunctionManage";
     }
-
+    //保存配置提交
+    @RequestMapping("/admin/saveconfigure")
+    public @ResponseBody String adminSaveConfigure(HttpServletRequest request, HttpServletResponse response) {
+        String AllTerm=request.getParameter("AllTerm");
+        String AllGrade=request.getParameter("AllGrade");
+        String AllCollege=request.getParameter("AllCollege");
+        String CurrentTerm=request.getParameter("CurrentTerm");
+        String FileFolder=request.getParameter("FileFolder");
+        String Selfverification=request.getParameter("Selfverification");
+        CurrentInfo.setAllCollege(AllCollege);
+        CurrentInfo.setAllGrade(AllGrade);
+        CurrentInfo.setAllTerm(AllTerm);
+        CurrentInfo.setCurrentTerm(CurrentTerm);
+        CurrentInfo.setFileFolder(FileFolder);
+        CurrentInfo.setOtherConfigure("Selfverification", Selfverification);
+        return "0";
+    }
+     public static String listToString(List<String> stringList){
+        if (stringList==null) {
+            return null;
+        }
+        StringBuilder result=new StringBuilder();
+        boolean flag=false;
+        for (String string : stringList) {
+            if (flag) {
+                result.append(",");
+            }else {
+                flag=true;
+            }
+            result.append(string);
+        }
+        return result.toString();
+    }
+     
     @RequestMapping("admin/PersonManage")
     public String PersonManage(HttpServletRequest request, HttpServletResponse response) {
         return "admin/PersonManage";
@@ -70,23 +102,47 @@ public class AdminController {
     public String ServerInformation(HttpServletRequest request, HttpServletResponse response) {
         return "admin/EnvInfo";
     }
-    @RequestMapping("/admin/PersonalInfo")
-    public String teacher12(HttpServletRequest request,HttpServletResponse response) {
-         String sn=getCurrentUsername();
-         Teacher teacher = TeacherDao.getTeacherBySn(sn);
-         String name = teacher.getTeacherName();
-         String idCard = teacher.getTeacherIdcard();
-         String qq = teacher.getTeacherQq();
-         String tel =teacher.getTeacherTel();
-         request.setAttribute("sn", sn);
-         request.setAttribute("name",name);
-         request.setAttribute("idCard",idCard );
-         request.setAttribute("qq", qq);
-         request.setAttribute("tel", tel);
-         request.setAttribute("college", teacher.getTeacherCollege());
-         request.setAttribute("zc", teacher.getTeacherPosition());
-        return "admin/PersonalInfo";
-    } 
+    
+    
+    @RequestMapping("/admin/pinfo")
+    public String pinfo(HttpServletRequest request, HttpServletResponse response) {
+
+        return "/admin/PersonalInfo";
+    }
+
+    //密码修改提交处理
+    @RequestMapping("/admin/updatepassword")
+    public @ResponseBody String adminUpdatePassword(HttpServletRequest request, HttpServletResponse response) {
+        String sn=AuthorityManage.getCurrentUsername();
+        Teacher teacher = TeacherDao.getTeacherBySn(sn);
+        String pw=request.getParameter("pw");
+        String repw=request.getParameter("repw");
+        if (repw.matches("\\w{6,18}")) {
+             return "0";}
+        if (!pw.equals(CurrentInfo.getOtherConfigure("AdminPassword").toLowerCase())) {
+             return "1";}
+        if (pw.equals(repw.toLowerCase())) {
+             return "2";}
+        CurrentInfo.setOtherConfigure("AdminPassword", repw);
+        return "3";
+    }
+        //修改管理员用户名
+    @RequestMapping("/admin/updateadminname")
+    public @ResponseBody String adminUpdateName(HttpServletRequest request, HttpServletResponse response) {
+        String sn=AuthorityManage.getCurrentUsername();
+        Teacher teacher = TeacherDao.getTeacherBySn(sn);
+        String pw=request.getParameter("name");
+        String repw=request.getParameter("rename");
+        if (repw.matches("\\w{6,18}")) {
+             return "0";}
+        if (!pw.equals(CurrentInfo.getOtherConfigure("AdminUser").toLowerCase())) {
+             return "1";}
+        if (pw.equals(repw.toLowerCase())) {
+             return "2";}
+        CurrentInfo.setOtherConfigure("AdminUser", repw);
+        return "3";
+    }
+    
     @RequestMapping("admin/search")
     public @ResponseBody
     List<ManageResult> search(HttpServletRequest request, HttpServletResponse response) {
@@ -217,29 +273,6 @@ public class AdminController {
         return l;
     }
 
-    public List<String> getCurrentAuthoritiest(String sn) {
-        String str[] = {"ROLE_ACDEMIC", "ROLE_COUNSELLOR", "ROLE_DEAN", "ROLE_STUDENT", "ROLE_TEACHER", "ROLE_TUTOR", "ROLE_ADMIN"};
-        List list = new LinkedList();
-        try {
-            Teacher tea = TeacherDao.getTeacherBySn(sn);
-            char[] ch = Integer.toBinaryString(Integer.valueOf(tea.getTeacherRoleValue())).toCharArray();
-            int j = -1;
-            for (int i = ch.length - 1; i >= 0; i--) {
-                j++;
-                if (String.valueOf(ch[i]).equals("1")) {
-                    list.add(str[j]);
-                }
-            }
-        } catch (Exception e) {
-        }
-        try {
-            Student std = StudentDao.getStudentBySn(sn);
-            System.out.println("找到学生" + std.getStudentName());
-            list.add("ROLE_STUDENT");
-        } catch (Exception e) {
-        }
-        return list;
-    }
 
     //管理员页面Role编辑
 
@@ -254,10 +287,10 @@ public class AdminController {
 
         StringBuffer sb = new StringBuffer();
         sb.append("<form role=\"form\">已选择教师sn：" + sn + "<br><div class=\"checkbox\">");
-        List<String> list = getCurrentAuthoritiest(sn);
-        String str[] = {"ROLE_ACDEMIC", "ROLE_COUNSELLOR", "ROLE_DEAN", "ROLE_STUDENT", "ROLE_TEACHER", "ROLE_TUTOR", "ROLE_ADMIN"};
-        String str2[] = {"教务员", "辅导员", "院长", "学生", "教工", "助教", "系统管理员"};
-        String str3[] = {"1", "2", "4", "8", "16", "32", "64"};
+        List<String> list = AuthorityManage.getCurrentAuthoritiest(sn);
+        String str[] = {"ROLE_ACDEMIC","ROLE_DEAN","ROLE_TEACHER"};
+        String str2[] = {"教务员", "院长",  "教工"};
+        String str3[] = {"1", "2", "4"};
         // System.out.println(list);
         for (int i = 0; i < str.length; i++) {
 
@@ -290,7 +323,4 @@ public class AdminController {
         TeacherDao.updateTeacherById(teacher);
         return "ok";
     }
-    public String getCurrentUsername() {
-      return SecurityContextHolder.getContext().getAuthentication().getName();
-   }
 }

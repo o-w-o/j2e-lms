@@ -19,7 +19,6 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.OutputStream;
 import java.io.UnsupportedEncodingException;
 import java.util.Calendar;
@@ -43,7 +42,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
-
+import cn.edu.henu.rjxy.lms.server.AuthorityManage;
+import cn.edu.henu.rjxy.lms.server.CurrentInfo;
+import net.sf.json.JSONArray;
 /**
  *
  * @author Administrator
@@ -52,9 +53,26 @@ import org.springframework.web.bind.annotation.ResponseBody;
 public class DeanController {
     @RequestMapping("/dean")
      public String personal_InfInformation(HttpServletRequest request, HttpServletResponse response) {
-        request.setAttribute("username",SecurityContextHolder.getContext().getAuthentication().getName());
-
-         return "dean/Index";
+       
+        int CurrentTerm=CurrentInfo.getCurrentTerm();
+        List<String> Term=CurrentInfo.getAllTerm();
+        int nextTerm;
+        if (CurrentTerm>0) {
+            request.setAttribute("Term", CurrentTerm);
+        
+        }else{
+            CurrentTerm=CurrentTerm*-1; 
+            request.setAttribute("Term", CurrentTerm);
+        }
+         nextTerm=999999;
+            for (String Term1 : Term) {
+                int tmp=Integer.parseInt(Term1);
+                if (tmp>CurrentTerm && tmp<=nextTerm) {
+                    nextTerm=tmp;
+                }
+            }
+       request.setAttribute("newTerm", nextTerm);
+       return "dean/Index";
      }
      
      @RequestMapping("/stu_index2")
@@ -63,23 +81,48 @@ public class DeanController {
 
          return "stu_index2";
      }
-     
-         @RequestMapping("dean/personManage")
-    public String PersonManage(HttpServletRequest request, HttpServletResponse response) {
-        return "dean/personManage";
+    
+    @RequestMapping("/dean/pinfo")
+    public String pinfo(HttpServletRequest request, HttpServletResponse response) {
+
+        return "/dean/PersonalInfo";
     }
-     
-     @RequestMapping("/dean/MyInfo")
-     public String myInfo_InfInformation(HttpServletRequest request, HttpServletResponse response) {
-         String sn=getCurrentUsername();
-         Teacher teacher = TeacherDao.getTeacherBySn(sn);
-         request.setAttribute("sn", sn);
-         request.setAttribute("name", teacher.getTeacherName());
-         request.setAttribute("idCard", teacher.getTeacherIdcard());
-         request.setAttribute("qq", teacher.getTeacherQq());
-         request.setAttribute("tel", teacher.getTeacherTel());
-         return "dean/MyInfo";
-     }
+    
+    @RequestMapping("dean/pmanage")
+    public String PersonManage(HttpServletRequest request, HttpServletResponse response) {
+        return "dean/PersonManage";
+    }
+    //更新头像id
+    @RequestMapping("/dean/updateimgid")
+    public @ResponseBody String deanUpdateimgid(HttpServletRequest request, HttpServletResponse response) {
+        return AuthorityManage.updateTecImgId(request, response);
+    }
+        //返回admin信息
+    @RequestMapping("/dean/getpersoninfo")
+    public @ResponseBody Teacher deanPersonalInformation(HttpServletRequest request, HttpServletResponse response) {
+        return AuthorityManage.GetTecPersonalInfo();
+    }
+     //个人信息修改提交处理
+    @RequestMapping("/dean/updatepersoninfo")
+    public @ResponseBody String deanUpdatePersonInfo(HttpServletRequest request, HttpServletResponse response) throws Exception {
+        return AuthorityManage.UpdateTecPersonlInfo(request, response);
+    }
+    //密码修改提交处理
+    @RequestMapping("/dean/updatepassword")
+    public @ResponseBody String deanUpdatePassword(HttpServletRequest request, HttpServletResponse response) {
+        return AuthorityManage.UpdateTecPassword(request, response);
+    } 
+//     @RequestMapping("/dean/MyInfo")
+//     public String myInfo_InfInformation(HttpServletRequest request, HttpServletResponse response) {
+//         String sn=getCurrentUsername();
+//         Teacher teacher = TeacherDao.getTeacherBySn(sn);
+//         request.setAttribute("sn", sn);
+//         request.setAttribute("name", teacher.getTeacherName());
+//         request.setAttribute("idCard", teacher.getTeacherIdcard());
+//         request.setAttribute("qq", teacher.getTeacherQq());
+//         request.setAttribute("tel", teacher.getTeacherTel());
+//         return "dean/MyInfo";
+//     }
      @RequestMapping("/dean/deanButton")
      public String deanButton(HttpServletRequest request, HttpServletResponse response) {
 
@@ -94,82 +137,37 @@ public class DeanController {
     public String szxs(HttpServletRequest request, HttpServletResponse response) {
         return "dean/studentzs";
      }
-    
-    @RequestMapping("/dean/resetpw_p")
-    public @ResponseBody String resetpw_p(HttpServletRequest request, HttpServletResponse response) {
-        String sn=getCurrentUsername();
-        Teacher teacher=TeacherDao.getTeacherBySn(sn);
-        String pw=request.getParameter("pw");
-        String repw=request.getParameter("repw");
-        if (!pw.equals(teacher.getTeacherPwd().toLowerCase())) {
-             return "1";}
-        if (pw.equals(repw.toLowerCase())) {
-             return "2";}
-        teacher.setTeacherPwd(repw);
-        TeacherDao.updateTeacherById(teacher);
-        return "3";
-     }
-    
-    @RequestMapping("/dean/update")
-    public @ResponseBody  String update(HttpServletRequest request, HttpServletResponse response) {
-        String tsn=getCurrentUsername();
-        Teacher teacher=TeacherDao.getTeacherBySn(tsn);
-        String qq=request.getParameter("qq");
-        teacher.setTeacherQq(qq);
-        String name=request.getParameter("name");
-        teacher.setTeacherName(name);
-        String tel=request.getParameter("tel");
-        teacher.setTeacherTel(tel);
-        String idCard=request.getParameter("idCard");
-        teacher.setTeacherIdcard(idCard);
-        TeacherDao.updateTeacherById(teacher);
-        System.out.println("ssssss");
-        return "0";
-     }
-    
+
     @RequestMapping("/dean/end")
     public @ResponseBody  String end(HttpServletRequest request, HttpServletResponse response) throws IOException {
+        int CurrentTerm=CurrentInfo.getCurrentTerm();
         System.out.println("end");
-        return "1";
+        if (CurrentTerm>0) {
+            CurrentInfo.setCurrentTerm("-"+String.valueOf(CurrentTerm));
+            return "1";
+        }
+        return "0";
     }
     
     @RequestMapping("/dean/start")
     public @ResponseBody  String start(HttpServletRequest request, HttpServletResponse response) throws IOException {
-
-        try {
-            Properties p = new Properties();
-            String x = System.getProperty("file.separator");
-            File f = new File("D:"+x+"My.ini");
-            System.out.println(f.getAbsolutePath());
-        if (!f.exists()) {
-            f.createNewFile();
-            p.setProperty("term", "201602");//初始化学期信息
-        }else{
-            System.out.println(f.getAbsolutePath());//打印了配置文件的绝对路径
-            p.load(new FileInputStream(f));//下载数据
-            String term = p.getProperty("term");
-            char c = term.charAt(5);
-            term = term.substring(0, term.length()-1);
-            if (c=='1') {
-                term += '2';
-            }else if (c == '2'){
-                term += '3';
-            }else{
-                String tempString = term.substring(4);
-                Integer tempInteger = new Integer(term.substring(0, 4))+1;
-                term = tempInteger + tempString+"1";
-            }
-            p.setProperty("term", term);
-            
-        }
-        p.store(new FileOutputStream(f), "");//将修改的信息保存
-            
-        } catch (Exception e) {
-            System.out.println(e.toString());
+        int CurrentTerm=CurrentInfo.getCurrentTerm();
+        List<String> Term=CurrentInfo.getAllTerm();
+        int nextTerm;
+        if (CurrentTerm>0) {
             return "0";
+        }else{
+            CurrentTerm=CurrentTerm*-1; 
         }
-        
-        return "1";
+         nextTerm=999999;
+            for (String Term1 : Term) {
+                int tmp=Integer.parseInt(Term1);
+                if (tmp>CurrentTerm && tmp<=nextTerm) {
+                    nextTerm=tmp;
+                }
+            }
+            CurrentInfo.setCurrentTerm(String.valueOf(nextTerm));
+            return "1";
      }
   
        //正式教师根据工号范围分页
@@ -295,8 +293,7 @@ public class DeanController {
          System.out.println(list.getTr());
         return JSONObject.fromObject(jsonMap);
     }
-    
-    
+
      //导出正式表学生信息
     @RequestMapping("dean/daochuxuesheng")
     public void daochuxuesheng(HttpServletRequest request, HttpServletResponse response) throws IOException{
@@ -374,81 +371,19 @@ public class DeanController {
     }
     //前台显示学院
     @RequestMapping("dean/reg/hq_xy")
-    public @ResponseBody String[] xy(HttpServletRequest request){
-       String str[] = {
-        "请选择 ",
-       "软件学院",
-       "文学院",
-       "历史文化学院",
-       "教育科学学院",
-       "哲学与公共管理学院",
-       "法学院",
-       "新闻与传播学院",
-       "外语学院",
-       "经济学院",
-       "商学院",
-       "数学与统计学院",
-       "物理与电子学院",
-       "计算机与信息工程学院",
-       "环境与规划学院",
-       "生命科学学院",
-       "化学化工学院",
-       "土木建筑学院",
-       "艺术学院",
-       "体育学院",
-       "医学院",
-       "药学院",
-       "护理学院",
-       "淮河临床学院",
-       "东京临床学院",
-       "国际教育学院",
-       "民生学院",
-       "国际汉学院",
-       "欧亚国际学院",
-       "人民武装学院",
-       "远程与继续教育学院",
-       "马克思主义学院",
-       "大学外语教学部",
-       "公共体育部",
-       "军事理论教研部"
-       };
-      
-      return str;
+    public @ResponseBody List<String> xy(HttpServletRequest request){
+      return CurrentInfo.getAllCollege();
     }
     
     //学期返回前台,下拉框显示
        @RequestMapping("dean/fhxq")
-        public @ResponseBody String[] xq(HttpServletRequest request){
-            Calendar now = Calendar.getInstance();  
-            int year = now.get(Calendar.YEAR);
-            String str[] = {
-                 "请选择",
-                year+"01",
-                year+"02",
-                year+"03",
-                year-1+"01",
-                year-1+"02",
-                year-1+"03",
-                year+1+"01" 
-            };
-           return str;
+        public @ResponseBody List<String> xq(HttpServletRequest request){
+            return CurrentInfo.getAllTerm();
         }
          //年级返回前台,下拉框显示
        @RequestMapping("dean/reg/fhnj")
-        public @ResponseBody String[] nj(HttpServletRequest request){
-            Calendar now = Calendar.getInstance();  
-            int year = now.get(Calendar.YEAR);
-            String str[] = {
-                 "请选择 ",
-                year+"",
-                year-1+"",
-                year-2+"",
-                year-3+"",
-                year-4+"",
-                year-5+"",
-                year-6+""
-            };
-           return str;
+        public @ResponseBody List<String> nj(HttpServletRequest request){
+          return CurrentInfo.getAllGrade();
         }
    
 
@@ -528,12 +463,7 @@ public class DeanController {
         }
         System.out.println("文件生成...");
     }
-   
-     
-      public String getCurrentUsername() {
-      return SecurityContextHolder.getContext().getAuthentication().getName();
-      }
-      
+
       @RequestMapping("dean/search")
     public @ResponseBody
     List<ManageResult> search(HttpServletRequest request, HttpServletResponse response) {
@@ -664,29 +594,6 @@ public class DeanController {
         return l;
     }
 
-    public List<String> getCurrentAuthoritiest(String sn) {
-        String str[] = {"ROLE_ACDEMIC", "ROLE_COUNSELLOR", "ROLE_DEAN", "ROLE_STUDENT", "ROLE_TEACHER", "ROLE_TUTOR", "ROLE_ADMIN"};
-        List list = new LinkedList();
-        try {
-            Teacher tea = TeacherDao.getTeacherBySn(sn);
-            char[] ch = Integer.toBinaryString(Integer.valueOf(tea.getTeacherRoleValue())).toCharArray();
-            int j = -1;
-            for (int i = ch.length - 1; i >= 0; i--) {
-                j++;
-                if (String.valueOf(ch[i]).equals("1")) {
-                    list.add(str[j]);
-                }
-            }
-        } catch (Exception e) {
-        }
-        try {
-            Student std = StudentDao.getStudentBySn(sn);
-            System.out.println("找到学生" + std.getStudentName());
-            list.add("ROLE_STUDENT");
-        } catch (Exception e) {
-        }
-        return list;
-    }
 
     //管理员页面Role编辑
 
@@ -696,30 +603,23 @@ public class DeanController {
         request.setCharacterEncoding("UTF-8");
         String p = request.getParameter("p");
         String[] a = new String[1];
-
         String sn = request.getParameter("sn");
-
         StringBuffer sb = new StringBuffer();
         sb.append("<form role=\"form\">已选择教师sn：" + sn + "<br><div class=\"checkbox\">");
-        List<String> list = getCurrentAuthoritiest(sn);
-        String str[] = {"ROLE_ACDEMIC", "ROLE_COUNSELLOR", "ROLE_DEAN", "ROLE_STUDENT", "ROLE_TEACHER", "ROLE_TUTOR"};
-        String str2[] = {"教务员", "辅导员", "院长", "学生", "教工", "助教"};
-        String str3[] = {"1", "2", "4", "8", "16", "32"};
+        List<String> list = AuthorityManage.getCurrentAuthoritiest(sn);
+        String str[] = {"ROLE_ACDEMIC","ROLE_TEACHER"};
+        String str2[] = {"教务员",  "教工"};
+        String str3[] = {"1", "4"};
         // System.out.println(list);
         for (int i = 0; i < str.length; i++) {
-
             if (list.contains(str[i])) {
                 sb.append("<label><input name=\"rolevelue\" value=\"" + str3[i] + "\" type=\"checkbox\" checked = checked>" + str2[i] + "</label><br>");
             } else {
                 sb.append("<label><input name=\"rolevelue\" value=\"" + str3[i] + "\"  type=\"checkbox\">" + str2[i] + "</label><br>");
             }
-
         }
-
         sb.append("</div></form>");
-
         a[0] = sb.toString();
-
         return a;
     }
 
@@ -732,17 +632,51 @@ public class DeanController {
         request.setCharacterEncoding("UTF-8");
         String sn = request.getParameter("sn");
         String rolesum = request.getParameter("rolesum");
-
         Teacher teacher = TeacherDao.getTeacherBySn(sn);
-        List<String> list = getCurrentAuthoritiest(sn);
-        if(list.contains("ROLE_ADMIN")){        //先判断此人之前是否有管理员权限
-            teacher.setTeacherRoleValue(Integer.valueOf(rolesum)+64);
-        }else{
+//        List<String> list = AuthorityManage.getCurrentAuthoritiest(sn);
+//        if(list.contains("ROLE_ADMIN")){        //先判断此人之前是否有管理员权限
+//            teacher.setTeacherRoleValue(Integer.valueOf(rolesum)+8);
+//        }else{
+//            teacher.setTeacherRoleValue(Integer.valueOf(rolesum));
+//        }
+        if (rolesum.equals("1")||rolesum.equals("4")||rolesum.equals("5")) {
             teacher.setTeacherRoleValue(Integer.valueOf(rolesum));
+            TeacherDao.updateTeacherById(teacher);
+            return "ok";
+        }else{
+            return "error";
         }
-        TeacherDao.updateTeacherById(teacher);
-        return "ok";
+       
+    } 
+    
+    //设置教务员
+    @RequestMapping("dean/teachermessage")
+    public @ResponseBody String deanteachermessage(){
+         System.out.println("设置教务员");
+         List list = TeacherDao.getAllacdemicTeacher();
+         System.out.println(list.size());
+        JSONArray json = JSONArray.fromObject(list);
+        System.out.println("json="+json.toString());
+         return json.toString();
     }
-     
-     
+    
+     //批准教务员
+    @RequestMapping("dean/acedmicqxpz")
+    public @ResponseBody String acedmicqxpz(HttpServletRequest request){
+         int id = Integer.parseInt(request.getParameter("id"));
+         Teacher teacher = TeacherDao.getTeacherById(id);
+         teacher.setTeacherRoleValue(5);
+         TeacherDao.updateTeacherById(teacher);
+         return "1";
+    }
+     //取消教务员
+    @RequestMapping("dean/acedmicqx")
+    public @ResponseBody String acedmicqx(HttpServletRequest request){
+        int id = Integer.parseInt(request.getParameter("id"));
+        Teacher teacher = TeacherDao.getTeacherById(id);
+        teacher.setTeacherRoleValue(4);
+        TeacherDao.updateTeacherById(teacher);
+         return "1";
+    }
+    
 }

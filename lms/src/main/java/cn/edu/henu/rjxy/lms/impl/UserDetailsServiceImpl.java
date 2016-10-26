@@ -7,33 +7,42 @@ import cn.edu.henu.rjxy.lms.dao.StudentDao;
 import cn.edu.henu.rjxy.lms.dao.TeacherDao;
 import cn.edu.henu.rjxy.lms.model.Student;
 import cn.edu.henu.rjxy.lms.model.Teacher;
-import cn.edu.henu.rjxy.lms.server.StudentMethod;
-import cn.edu.henu.rjxy.lms.server.TeacherMethod;
-import cn.edu.henu.rjxy.lms.server.TempStudentMethod;
-import cn.edu.henu.rjxy.lms.server.TempTeacherMethod;
+import cn.edu.henu.rjxy.lms.server.CurrentInfo;
 import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.User;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
-import org.springframework.stereotype.Service;
-
 
 public class UserDetailsServiceImpl implements UserDetailsService {
     @Override
 	public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
         User user = null;
         String password = null;
-       
-        password=StudentMethod.studentLoginGetPasswordByUserName(username);
-        if (password=="" ||  password == null) {
-            password=TeacherDao.getTeacherBySn(username).getTeacherPwd();
-        };
+        try {
+            password=StudentDao.getStudentBySn(username).getStudentPwd();
+        } catch (Exception e) {
+        }
+        
+        if (password == null||password.equals("")) {
+            try {
+                 password=TeacherDao.getTeacherBySn(username).getTeacherPwd();
+            } catch (Exception e) {
+            }
+        }
+        
+        
+        if (password == null||password.equals("")) {
+            try {
+                if (username.equalsIgnoreCase(CurrentInfo.getOtherConfigure("AdminUser"))) {
+                    password=CurrentInfo.getOtherConfigure("AdminPassword");
+                }
+                 
+            } catch (Exception e) {
+            }
+        }      
         password=password.toLowerCase();
         //账户是否可用
         boolean enabled = true;
@@ -56,10 +65,16 @@ public class UserDetailsServiceImpl implements UserDetailsService {
 
 public static ArrayList<GrantedAuthority> getAuthoritiesBySn(String sn){
     ArrayList<GrantedAuthority> authorities = new ArrayList<>();
-    String str[] = {"ROLE_ACDEMIC","ROLE_COUNSELLOR","ROLE_DEAN","ROLE_STUDENT","ROLE_TEACHER","ROLE_TUTOR","ROLE_ADMIN"};
-    //                   1              2                 4              8          16           32           64
-   //                   1+16+8                                                                            127
-        try {
+    String str[] = {"ROLE_ACDEMIC","ROLE_DEAN","ROLE_TEACHER"};//,"ROLE_ADMIN"
+    //                   1              2              4             8          
+    try {
+             Student std=StudentDao.getStudentBySn(sn);
+             System.out.println("找到学生"+std.getStudentName());
+             authorities.add(new SimpleGrantedAuthority("ROLE_STUDENT"));
+             return authorities;
+        } catch (Exception e) {
+        }
+    try {
             Teacher tea=TeacherDao.getTeacherBySn(sn);
             System.out.println("找到老师"+tea.getTeacherName());
             System.out.println("getTeacherPosition"+tea.getTeacherRoleValue());
@@ -71,17 +86,19 @@ public static ArrayList<GrantedAuthority> getAuthoritiesBySn(String sn){
                 authorities.add(new SimpleGrantedAuthority(str[j]));
                 }
               }
-             
+             return authorities;
         } catch (Exception e) {
         }
+        
         try {
-             Student std=StudentDao.getStudentBySn(sn);
-             System.out.println("找到学生"+std.getStudentName());
-             authorities.add(new SimpleGrantedAuthority("ROLE_STUDENT"));
-             
-        } catch (Exception e) {
+                if (sn.equalsIgnoreCase(CurrentInfo.getOtherConfigure("AdminUser"))) {
+                   authorities.add(new SimpleGrantedAuthority("ROLE_ADMIN"));
+                   authorities.add(new SimpleGrantedAuthority("ROLE_ACDEMIC"));
+                }
+                return authorities; 
+            } catch (Exception e) {
         }
-       System.out.println(authorities.toString());
+        //System.out.println(authorities.toString());
             return authorities;
 }
   

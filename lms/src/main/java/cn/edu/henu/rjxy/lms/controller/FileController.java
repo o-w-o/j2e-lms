@@ -1,5 +1,6 @@
 package cn.edu.henu.rjxy.lms.controller;
 
+import cn.edu.henu.rjxy.lms.server.CurrentInfo;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import org.springframework.stereotype.Controller;
@@ -17,30 +18,47 @@ import org.springframework.web.bind.annotation.ResponseBody;
 @Controller
 public class FileController {
     
+    @RequestMapping("/file")
+    public String FileString(HttpServletRequest request, HttpServletResponse response) {
+        String uri = request.getParameter("uri");
+        uri = uri.replaceAll("\\\\", "/");
+        uri = uri.replaceAll("//", "/");
+        System.out.println(uri);
+        request.setAttribute("uri", "file/" + uri);
+        return "/file"+uri;
+    }
+    
     @RequestMapping("/getswf")
     public String Filegetswf(HttpServletRequest request, HttpServletResponse response) {
         String uri=request.getParameter("uri");
         uri=uri.replaceAll("\\\\", "/");
         uri=uri.replaceAll("//", "/");
         System.out.println(uri);
-	request.setAttribute("uri","file/"+uri);
+        if (uri.startsWith("file")||uri.startsWith("/file")) {
+            request.setAttribute("uri", uri);
+        }else{
+            request.setAttribute("uri", "file/"+uri);
+        }
 	return "getswf"; 
     }
     
-    @RequestMapping("/getVideo")
+    @RequestMapping("/getvideo")
     public String Filegetvideo(HttpServletRequest request, HttpServletResponse response) {
         String uri=request.getParameter("uri");
         uri=uri.replaceAll("\\\\", "/");
         uri=uri.replaceAll("//", "/");
         System.out.println(uri);
-	request.setAttribute("uri","file/"+uri);
-	return "getVideo"; 
+        if (uri.startsWith("file")||uri.startsWith("/file")) {
+            request.setAttribute("uri", uri);
+        }else{
+            request.setAttribute("uri", "file/"+uri);
+        }
+	return "getvideo"; 
     }
     
     @RequestMapping("/officedocconverter")
     public @ResponseBody String officedocconverter(HttpServletRequest request, HttpServletResponse response) {
-        String uri=request.getClass().getResource("/").getFile().toString()+request.getParameter("uri");
-        uri=uri.replace("build/web/WEB-INF/classes/", "web/file/");
+        String uri=CurrentInfo.getFileFolder()+request.getParameter("uri");
         uri=uri.replaceAll("\\\\", "/");
         File f = new File(uri.substring(0,uri.lastIndexOf("."))+".swf");  // 输入要删除的文件位置
         if(f.exists())

@@ -13,6 +13,8 @@ import cn.edu.henu.rjxy.lms.dao.TermCourseDao;
 import cn.edu.henu.rjxy.lms.dao.TermCourseInfoDao;
 import cn.edu.henu.rjxy.lms.model.Student;
 import cn.edu.henu.rjxy.lms.model.Teacher;
+import cn.edu.henu.rjxy.lms.server.AuthorityManage;
+import cn.edu.henu.rjxy.lms.server.CurrentInfo;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
@@ -26,21 +28,20 @@ import java.io.OutputStreamWriter;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
+import java.io.UnsupportedEncodingException;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
-import javax.servlet.http.HttpSession;
-
-import org.springframework.security.core.context.SecurityContextHolder;
+import net.sf.json.JSONObject;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseBody;
-
-
 
 /**
  *
@@ -52,7 +53,7 @@ public class StuController {
     //返回学生信息
     @RequestMapping("/student/getpersoninfo")
     public @ResponseBody Student personal_InfInformation2(HttpServletRequest request, HttpServletResponse response) {
-        String sn=getCurrentUsername();
+        String sn=AuthorityManage.getCurrentUsername();
         Student std=StudentDao.getStudentBySn(sn);
         std.setStudentPwd("");
         return std;
@@ -60,10 +61,12 @@ public class StuController {
     //密码修改提交处理
     @RequestMapping("/student/updatepassword")
     public @ResponseBody String resetpassword_p(HttpServletRequest request, HttpServletResponse response) {
-        String sn=getCurrentUsername();
+        String sn=AuthorityManage.getCurrentUsername();
         Student std=StudentDao.getStudentBySn(sn);
         String pw=request.getParameter("pw");
         String repw=request.getParameter("repw");
+        if (repw.matches("\\w{6,18}")) {
+             return "0";}
         if (!pw.equals(std.getStudentPwd().toLowerCase())) {
              return "1";}
         if (pw.equals(repw.toLowerCase())) {
@@ -74,22 +77,38 @@ public class StuController {
     }
     //个人信息修改提交处理
     @RequestMapping("/student/updatepersoninfo")
-    public @ResponseBody String resetinf_p(HttpServletRequest request, HttpServletResponse response) {
-        String sn=getCurrentUsername();
+    public @ResponseBody String resetinf_p(HttpServletRequest request, HttpServletResponse response) throws UnsupportedEncodingException {
+        request.setCharacterEncoding("UTF-8");
+        String sn=AuthorityManage.getCurrentUsername();
         Student std=StudentDao.getStudentBySn(sn);
         String name=request.getParameter("name");
-        String idcard=request.getParameter("idcard");
+//        String idcard=request.getParameter("idcard");
         String grade=request.getParameter("grade");
         String college=request.getParameter("college");
         String sex=request.getParameter("sex");
         String telnum=request.getParameter("telnum");
         String qqnum=request.getParameter("qqnum");
+        if (!name.matches("[\u4e00-\u9fa5]{2,4}")) {
+            return "姓名校验未通过！";
+        }
         std.setStudentName(name);
-        std.setStudentIdcard(idcard);
+//        if (!idcard.matches("([0-9]{17}([0-9]|X))|([0-9]{15})") ){
+//            return "身份证校验未通过！";
+//        }       
+//        std.setStudentIdcard(idcard);
+        if (!grade.matches("\\d{4}") ){
+            return "年级校验未通过！";
+        } 
         std.setStudentGrade(Integer.valueOf(grade));
         std.setStudentCollege(college);
         std.setStudentSex(sex.equals("男"));
+        if (!telnum.matches("\\d{11}") ){
+            return "电话号码校验未通过！";
+        } 
         std.setStudentTel(telnum);
+        if (!qqnum.matches("\\d{5,10}") ){
+            return "QQ号码校验未通过！";
+        } 
         std.setStudentQq(qqnum);
         StudentDao.updateStudent(std);
         return "1";
@@ -97,7 +116,7 @@ public class StuController {
     //学生选课提交处理
     @RequestMapping("/student/subselectcourse")
     public @ResponseBody String submitcourse(HttpServletRequest request, HttpServletResponse response) {
-        String sn=getCurrentUsername();
+        String sn=AuthorityManage.getCurrentUsername();
         Student std=StudentDao.getStudentBySn(sn);
         Integer cid=Integer.valueOf(request.getParameter("scid"));
         try {
@@ -105,6 +124,16 @@ public class StuController {
         } catch (Exception e) {
             return "0";
         }
+        return "1"; 
+    }
+        //学生头像id修改
+    @RequestMapping("/student/updateimgid")
+    public @ResponseBody String updateStuImgId(HttpServletRequest request, HttpServletResponse response) {
+        String sn=AuthorityManage.getCurrentUsername();
+        Student std=StudentDao.getStudentBySn(sn);
+        Integer imgid=Integer.valueOf(request.getParameter("imgid"));
+        std.setStudentImg(imgid);
+        StudentDao.updateStudent(std);
         return "1"; 
     }
       //选课时展示的课程页
@@ -115,28 +144,31 @@ public class StuController {
         String []a = new String[2];
         a[0]=TermCourseInfoDao.getCourseInfo(term, cid, 0);
         a[1]=TermCourseInfoDao.getCourseInfo(term, cid, 1);
-        if(a[0].equals(""))a[0]="暂无";
-        if(a[1].equals(""))a[1]="暂无";
+        if(a[0].isEmpty())a[0]="暂无";
+        if(a[1].isEmpty())a[1]="暂无";
         return a;
     }
     //获取已选课程
     @RequestMapping("/student/getselectcourse")
     public @ResponseBody Map[] getselectcourse(HttpServletRequest request, HttpServletResponse response) throws Exception{
-        String stusn=getCurrentUsername();
+        String stusn=AuthorityManage.getCurrentUsername();
         int xueqi=getCurrentTerm();
         List list =  StudentSelectCourseDao.getStudentSelectCourseNameByTermSnCourseId(xueqi, stusn);
-        Map []a = new Map[list.size()/2];
-        for (int i = 0; i < list.size()/2; i++) {
+        System.out.println(list.size());
+        Map []a = new Map[list.size()/4];
+        for (int i = 0; i < list.size()/4; i++) {
            a[i]=new HashMap();
-           a[i].put("course", list.get(2*i+1));
-           a[i].put("scid", list.get(2*i));
+           a[i].put("course", list.get(4*i+1));
+           a[i].put("scid", list.get(4*i));
+            a[i].put("teacher", list.get(4*i+2));
+            a[i].put("ClassName", list.get(4*i+3));
         }
         return a;
     }   
     //获取已选未批准课程
     @RequestMapping("/student/getselectingcourse")
     public @ResponseBody Map[] getselectingcourse(HttpServletRequest request, HttpServletResponse response) throws Exception{
-        String stusn=getCurrentUsername();
+        String stusn=AuthorityManage.getCurrentUsername();
         int xueqi=getCurrentTerm();
         List list =  StudentSelectCourseDao.getStudentSelectCourseNameByTermSnCourseId2(xueqi, stusn);
         Map []a = new Map[list.size()/4];
@@ -165,12 +197,12 @@ public class StuController {
         a[2].put("teacherSn",tec.getTeacherSn());//教师工号
         a[3].put("syllabus", TermCourseInfoDao.getCourseInfo(Integer.valueOf(term), TermCourseDao.getCourseidByCourseId(scid), 0));//html版课程大纲
         a[4].put("introduction", TermCourseInfoDao.getCourseInfo(Integer.valueOf(term), TermCourseDao.getCourseidByCourseId(scid), 1));//html版课程介绍
-        File f =new File(getFileFolder(request)+term +"/"+collage+"/"+courseName+"/课程大纲/");
+        File f =new File(getFileFolder()+term +"/"+collage+"/"+courseName+"/课程大纲/");
         if(f.exists()&&f.isDirectory()){
             String[] files = f.list();
             for (String file : files) {
                 if (file.toLowerCase().endsWith(".swf")) {
-                    swf_syllabus="/getswf?uri="+term +"/"+collage+"/"+courseName+"/课程大纲/"+file;
+                    swf_syllabus="/getswf?uri=file/"+term +"/"+collage+"/"+courseName+"/课程大纲/"+file;
                     break;
                 }
             }
@@ -188,16 +220,15 @@ public class StuController {
         String courseName =TermCourseDao.getCourseNameByCourseId(scid);
         String tec_sn= tec.getTeacherSn();
         String tec_name = tec.getTeacherName();
-        String stusn=getCurrentUsername();
-        String ff = getFileFolder(request)+"homework/"+term +"/"+collage+"/"+tec_sn+"/"+tec_name+"/"+courseName+"/";
+        String stusn=AuthorityManage.getCurrentUsername();
+        String ff = getFileFolder()+"homework/"+term +"/"+collage+"/"+tec_sn+"/"+tec_name+"/"+courseName+"/";
         String ff2;
         int length = haveFile(ff);
-        String dataString="";
         DateFormat df = new SimpleDateFormat("MM/dd/yyyy HH:mm:ss");
         Date d1 = new Date();
         List<Map> sumList=new ArrayList<Map>();
         for(int i = 1;i<=length;i++){
-            ff2 = getFileFolder(request)+"uploadhomework/"+term +"/"+collage+"/"+tec_sn+"/"+tec_name+"/"+courseName+"/"+i+"/"+courseName+"/"+stusn+"/";
+            ff2 = getFileFolder()+"uploadhomework/"+term +"/"+collage+"/"+tec_sn+"/"+tec_name+"/"+courseName+"/"+i+"/"+TermCourseDao.getclassNameByCourseId(scid)+"/"+stusn+"/";
             System.out.println(length);
             Date d3 = df.parse(readline(ff+"/"+i+"/Workall.txt")[2]);
             if(d1.getTime() > d3.getTime()){//判断作业是否已开始
@@ -231,45 +262,59 @@ public class StuController {
     }
       //学生选课页
     @RequestMapping("/student/addnewcourse")
-    public @ResponseBody String[] stu_addcourse(HttpServletRequest request, HttpServletResponse response) {
-        String sumcourse="";
+    public @ResponseBody List<Map> stu_addcourse(HttpServletRequest request, HttpServletResponse response) {
+        List<Map> courseList=new ArrayList<Map>();
         int xueqi=getCurrentTerm();
-         List<String> coulist = CourseDao.getCourseIdByTerm(xueqi);
+        List<String> coulist = CourseDao.getCourseIdByTerm(xueqi);
         for (String coulist1 : coulist) {
-            sumcourse = sumcourse+ "{text: \"" + CourseDao.getCourseById(Integer.valueOf(coulist1)).getCourseName() + "\",state: {expanded: false},";
+            boolean effective=false;
             List<String> teacher_cou = CourseDao.getTeacherSnByTermCourseId(xueqi, Integer.valueOf(coulist1));
+            Map courseMap = new LinkedHashMap();
+            Map stateMap = new LinkedHashMap();
+            courseMap.put("text", CourseDao.getCourseById(Integer.valueOf(coulist1)).getCourseName());
+            stateMap.put("expanded", false);
+            courseMap.put("state",stateMap);
             if (teacher_cou.size()>0) {
-                sumcourse=sumcourse+ "nodes: [";
+            List<Map> teacherList=new ArrayList<Map>();
                 for (String teacher_cou1 : teacher_cou) {
-                    sumcourse = sumcourse+ "{text: \"" + TeacherDao.getTeacherBySn(teacher_cou1).getTeacherName() + "\",";
+                    Map teacherMap = new LinkedHashMap();
+                    teacherMap.put("text", TeacherDao.getTeacherBySn(teacher_cou1).getTeacherName());
                     List<String> stu_cou_clas = CourseDao.getClassSnByTermCourseNumber(xueqi, Integer.valueOf(coulist1), teacher_cou1);
-                    if (stu_cou_clas.size()>0) {
-                        sumcourse=sumcourse+ "nodes: [";
+                    if (stu_cou_clas.size()>0) {                   
+                        List<Map> classList=new ArrayList<Map>();
                         for (String stu_cou_cla : stu_cou_clas) {
-                            sumcourse = sumcourse+ "{text: \"" + ClassesDao.getClassById(Integer.valueOf(stu_cou_cla)).getClassName() + "\"" + ",scid: \"" + StudentSelectCourseDao.getTermCourseIdByothers(xueqi, Integer.valueOf(coulist1), Integer.valueOf(stu_cou_cla), TeacherDao.getTeacherBySn(teacher_cou1).getTeacherId()) + "\"," + "},";
+                            Map classMap = new LinkedHashMap();
+                            classMap.put("text", ClassesDao.getClassById(Integer.valueOf(stu_cou_cla)).getClassName());
+                            classMap.put("scid",StudentSelectCourseDao.getTermCourseIdByothers(xueqi, Integer.valueOf(coulist1), Integer.valueOf(stu_cou_cla), TeacherDao.getTeacherBySn(teacher_cou1).getTeacherId()));
+                            classList.add(classMap);
+                            effective=true;
                         }
-                        sumcourse=sumcourse+ "],";
+                        teacherMap.put("nodes", classList);
                     }
-                    sumcourse=sumcourse+ "},";
-                } //j for end
-                sumcourse=sumcourse+ "],";
+                    teacherList.add(teacherMap); 
+                }
+            courseMap.put("nodes", teacherList);  
             }
-            sumcourse=sumcourse+ "},"; 
+            if (effective) {courseList.add(courseMap);}
+            
         }
-        String []a = new String[1];
-        a[0]=sumcourse;
-	return a;
+	return courseList;
     }
     //学生首页
     @RequestMapping("/student")
     public String stu_index(HttpServletRequest request, HttpServletResponse response) {
-	return "student/stu_index";
+	return "student/Index";
+    }
+    //学生首页
+    @RequestMapping("/student/courses")
+    public String stuSettings(HttpServletRequest request, HttpServletResponse response) {
+        return "student/UcourseCenter";
     }
     //取消选课处理
     @RequestMapping("/student/cancelcourse")
     public @ResponseBody  String stuCancelCourse(HttpServletRequest request, HttpServletResponse response) {
         String scid=request.getParameter("scid");
-        String stusn=getCurrentUsername();
+        String stusn=AuthorityManage.getCurrentUsername();
         TeacherDao.updateStudentCourse(StudentDao.getStudentBySn(stusn).getStudentId(),Integer.valueOf(scid), true);
 	return "1";
     }
@@ -277,7 +322,7 @@ public class StuController {
     @RequestMapping("/student/quitcourse")
     public @ResponseBody String stuQuitCourse(HttpServletRequest request, HttpServletResponse response) {
         String scid=request.getParameter("scid");
-        String stusn=getCurrentUsername();
+        String stusn=AuthorityManage.getCurrentUsername();
         TeacherDao.updateStudentCourse(StudentDao.getStudentBySn(stusn).getStudentId(),Integer.valueOf(scid), true);
 	return "1";
     }
@@ -292,12 +337,12 @@ public class StuController {
       String collage = tec.getTeacherCollege();
       String term =TermCourseDao.getxueqiBySCId(cid).toString();
       String courseName =TermCourseDao.getCourseNameByCourseId(cid);
-      return read((getFileFolder(request)+term +"/"+collage+"/"+tec_sn+"/"+tec_name+"/"+courseName+"/"+"课程目录结构"+"/"+"test.json").replaceAll("\\\\", "/"));
+      return read((getFileFolder()+term +"/"+collage+"/"+tec_sn+"/"+tec_name+"/"+courseName+"/"+"课程目录结构"+"/"+"test.json").replaceAll("\\\\", "/"));
   }
    //返回作业详情  
     @RequestMapping("/student/dohomework")
     public @ResponseBody Map dohomework(HttpServletRequest request, HttpServletResponse response) throws Exception{
-        String stusn=getCurrentUsername();
+        String stusn=AuthorityManage.getCurrentUsername();
         int xueqi=getCurrentTerm();
         String scid = request.getParameter("scid");
         String homeworkid= request.getParameter("homeworkid");
@@ -310,7 +355,7 @@ public class StuController {
         String collage = tec.getTeacherCollege();
         String term =TermCourseDao.getxueqiBySCId(scid).toString();
         String courseName =TermCourseDao.getCourseNameByCourseId(scid);
-        String ff = getFileFolder(request)+"homework/"+term+"/"+collage +"/"+tec_sn+"/"+tec_name+"/"+courseName+"/"+homeworkid+"/";
+        String ff = getFileFolder()+"homework/"+term+"/"+collage +"/"+tec_sn+"/"+tec_name+"/"+courseName+"/"+homeworkid+"/";
         Date d1 = new Date();
         Date d3 = df.parse(readline(ff+"/Workall.txt")[2]);
         Map a = new HashMap();
@@ -323,14 +368,14 @@ public class StuController {
             if(f.exists()&&f.isDirectory()){
                 String[] files = f.list();
                 String ff2="/file/homework/"+term+"/"+collage +"/"+tec_sn+"/"+tec_name+"/"+courseName+"/"+homeworkid+"/1/";
-                HwattachmentList.add(ff2+"1.txt");
+                //HwattachmentList.add(ff2+"1.txt");
                 for (String file : files) {
                     HwattachmentList.add(ff2+file);
                 }
             }   
             a.put("Hwattachment",HwattachmentList);   
-            HwattachmentList.clear();
-            ff = getFileFolder(request)+"uploadhomework/"+term +"/"+collage+"/"+tec_sn+"/"+tec_name+"/"+courseName+"/"+homeworkid+"/"+TermCourseDao.getclassNameByCourseId(scid)+"/"+stusn+"/";
+            HwattachmentList=new ArrayList<String>();
+            ff = getFileFolder()+"uploadhomework/"+term +"/"+collage+"/"+tec_sn+"/"+tec_name+"/"+courseName+"/"+homeworkid+"/"+TermCourseDao.getclassNameByCourseId(scid)+"/"+stusn+"/";
             String ff2="/file/uploadhomework/"+term +"/"+collage+"/"+tec_sn+"/"+tec_name+"/"+courseName+"/"+homeworkid+"/"+TermCourseDao.getclassNameByCourseId(scid)+"/"+stusn+"/";
             a.put("HwtextWork", read(ff+"/textWork.html"));
             a.put("Hwtime", read(ff+"/submitTime.txt"));
@@ -354,7 +399,7 @@ public class StuController {
         
       String textWork=request.getParameter("HwEitor");
       String cid=request.getParameter("scid");
-      String stusn=getCurrentUsername();
+      String stusn=AuthorityManage.getCurrentUsername();
       String homeworkid=request.getParameter("homeworkid");
       Teacher tec=TeacherDao.getTeacherById(TermCourseDao.getTecsnByCourseId(cid));
       String sn=tec.getTeacherSn();
@@ -363,8 +408,8 @@ public class StuController {
       String collage = tec.getTeacherCollege();
       String term =TermCourseDao.getxueqiBySCId(cid).toString();
       String courseName =TermCourseDao.getCourseNameByCourseId(cid);
-      String ff = getFileFolder(request)+"uploadhomework/"+term +"/"+collage+"/"+tec_sn+"/"+tec_name+"/"+courseName+"/"+homeworkid+"/"+TermCourseDao.getclassNameByCourseId(cid)+"/"+stusn+"/";
-      String ff2 = getFileFolder(request)+"homework/"+term+"/"+collage +"/"+tec_sn+"/"+tec_name+"/"+courseName+"/"+homeworkid+"/";
+      String ff = getFileFolder()+"uploadhomework/"+term +"/"+collage+"/"+tec_sn+"/"+tec_name+"/"+courseName+"/"+homeworkid+"/"+TermCourseDao.getclassNameByCourseId(cid)+"/"+stusn+"/";
+      String ff2 = getFileFolder()+"homework/"+term+"/"+collage +"/"+tec_sn+"/"+tec_name+"/"+courseName+"/"+homeworkid+"/";
       DateFormat df = new SimpleDateFormat("MM/dd/yyyy HH:mm:ss");
       Date d1 = new Date();
       Date d2 = df.parse(readline(ff2+"/Workall.txt")[1]);
@@ -391,7 +436,7 @@ public class StuController {
     //学生作业附件刷新
     @RequestMapping("/student/stuhwrefresh")
     public @ResponseBody List<String> stuhwrefresh(HttpServletRequest request, HttpServletResponse response) throws Exception{
-        String stusn=getCurrentUsername();
+        String stusn=AuthorityManage.getCurrentUsername();
         String scid = request.getParameter("scid");
         String homeworkid= request.getParameter("homeworkid");
         Teacher tec=TeacherDao.getTeacherById(TermCourseDao.getTecsnByCourseId(scid));
@@ -401,7 +446,7 @@ public class StuController {
         String collage = tec.getTeacherCollege();
         String term =TermCourseDao.getxueqiBySCId(scid).toString();
         String courseName =TermCourseDao.getCourseNameByCourseId(scid);
-        String ff = getFileFolder(request)+"uploadhomework/"+term +"/"+collage+"/"+tec_sn+"/"+tec_name+"/"+courseName+"/"+homeworkid+"/"+TermCourseDao.getclassNameByCourseId(scid)+"/"+stusn+"/";
+        String ff = getFileFolder()+"uploadhomework/"+term +"/"+collage+"/"+tec_sn+"/"+tec_name+"/"+courseName+"/"+homeworkid+"/"+TermCourseDao.getclassNameByCourseId(scid)+"/"+stusn+"/";
         String ff2="/file/uploadhomework/"+term +"/"+collage+"/"+tec_sn+"/"+tec_name+"/"+courseName+"/"+homeworkid+"/"+TermCourseDao.getclassNameByCourseId(scid)+"/"+stusn+"/";  
         File f =new File(ff);
          List<String> HwattachmentList=new ArrayList<String>();
@@ -418,7 +463,7 @@ public class StuController {
     //学生作业附件下载
     @RequestMapping("/student/downattach")
     public @ResponseBody String[] downattach(HttpServletRequest request, HttpServletResponse response) throws Exception{
-        String stusn=getCurrentUsername();
+        String stusn=AuthorityManage.getCurrentUsername();
         String scid = request.getParameter("scid");
         String src = request.getParameter("src");
         String homeworkid= request.getParameter("homeworkid");
@@ -429,38 +474,41 @@ public class StuController {
         String collage = tec.getTeacherCollege();
         String term =TermCourseDao.getxueqiBySCId(scid).toString();
         String courseName =TermCourseDao.getCourseNameByCourseId(scid);
-        String ff = getFileFolder(request)+"uploadhomework/"+term +"/"+collage+"/"+tec_sn+"/"+tec_name+"/"+courseName+"/"+homeworkid+"/"+TermCourseDao.getclassNameByCourseId(scid)+"/"+stusn+"/"+src;
+        String ff = getFileFolder()+"uploadhomework/"+term +"/"+collage+"/"+tec_sn+"/"+tec_name+"/"+courseName+"/"+homeworkid+"/"+TermCourseDao.getclassNameByCourseId(scid)+"/"+stusn+"/"+src;
         System.out.println(ff);
         File f=new File(ff);
         String []a = new String[1];
         a[0]="";
-        HttpSession session = request.getSession();
-        session.setAttribute("state", null);
+        java.io.BufferedInputStream bis = null;  
+        java.io.BufferedOutputStream bos = null;  
         try {
-        FileInputStream inputStream = new FileInputStream(f);
-        byte[] data = new byte[(int)f.length()];
-        int length = inputStream.read(data);
-        inputStream.close();
-        response.setContentType("application/octet-stream");
-        if (request.getHeader("User-Agent").toUpperCase().indexOf("MSIE") > 0) { 
-            response.setHeader("content-disposition", "attachment;filename=" + new String (src.getBytes("gb2312"), "UTF-8"));
-        } else {  
-            response.setHeader("content-disposition", "attachment;filename=" + new String (src.getBytes("gb2312"), "ISO8859-1" ));
-        }  
-        OutputStream stream = response.getOutputStream();
-        stream.write(data);
-        stream.flush();
-        stream.close(); 
+            response.setContentType("application/octet-stream");
+                if (request.getHeader("User-Agent").toUpperCase().indexOf("MSIE") > 0) { 
+                response.setHeader("content-disposition", "attachment;filename=" + new String (src.getBytes("gb2312"), "UTF-8"));
+                } else {  
+                response.setHeader("content-disposition", "attachment;filename=" + new String (src.getBytes("gb2312"), "ISO8859-1" ));
+                }  
+            OutputStream stream = response.getOutputStream();
+            bis = new BufferedInputStream(new FileInputStream(f));  
+            bos = new BufferedOutputStream(response.getOutputStream());  
+            byte[] buff = new byte[2048];  
+            int bytesRead;  
+            while (-1 != (bytesRead = bis.read(buff, 0, buff.length))) {  
+                bos.write(buff, 0, bytesRead);  
+            }  
         } catch (Exception e) {
         } finally {
-            session.setAttribute("state", "open");
+            if (bis != null)  
+                bis.close();  
+            if (bos != null)  
+                bos.close(); 
         }
         return a;
     }
     //学生作业附件删除
     @RequestMapping("/student/delattach")
     public @ResponseBody String delattach(HttpServletRequest request, HttpServletResponse response) throws Exception{
-              String stusn=getCurrentUsername();
+        String stusn=AuthorityManage.getCurrentUsername();
         String scid = request.getParameter("scid");
         String src = request.getParameter("src");
         String homeworkid= request.getParameter("homeworkid");
@@ -471,8 +519,8 @@ public class StuController {
         String collage = tec.getTeacherCollege();
         String term =TermCourseDao.getxueqiBySCId(scid).toString();
         String courseName =TermCourseDao.getCourseNameByCourseId(scid);
-        String ff = getFileFolder(request)+"uploadhomework/"+term +"/"+collage+"/"+tec_sn+"/"+tec_name+"/"+courseName+"/"+homeworkid+"/"+TermCourseDao.getclassNameByCourseId(scid)+"/"+stusn+"/"+src;
-         String ff2 = getFileFolder(request)+"homework/"+term+"/"+collage +"/"+tec_sn+"/"+tec_name+"/"+courseName+"/"+homeworkid+"/";
+        String ff = getFileFolder()+"uploadhomework/"+term +"/"+collage+"/"+tec_sn+"/"+tec_name+"/"+courseName+"/"+homeworkid+"/"+TermCourseDao.getclassNameByCourseId(scid)+"/"+stusn+"/"+src;
+         String ff2 = getFileFolder()+"homework/"+term+"/"+collage +"/"+tec_sn+"/"+tec_name+"/"+courseName+"/"+homeworkid+"/";
         DateFormat df = new SimpleDateFormat("MM/dd/yyyy HH:mm:ss");
       Date d1 = new Date();
       Date d2 = df.parse(readline(ff2+"/Workall.txt")[1]);
@@ -484,10 +532,28 @@ public class StuController {
         return "error";
     
     }
+    @RequestMapping("/student/resourcedir")
+    public @ResponseBody
+    String resourceDir(HttpServletRequest request, HttpServletResponse response) throws Exception {
+        String stsn = AuthorityManage.getCurrentUsername();
+        String scid = request.getParameter("scid");
+        String dir = request.getParameter("dir");
+        Teacher tec = TeacherDao.getTeacherById(TermCourseDao.getTecsnByCourseId(scid));
+        String tec_sn = tec.getTeacherSn();
+        String tec_name = tec.getTeacherName();
+        String collage = tec.getTeacherCollege();
+        String term = TermCourseDao.getxueqiBySCId(scid).toString();
+        String courseName = TermCourseDao.getCourseNameByCourseId(scid);
+        String resourceDir = "/" + term + "/" + collage + "/" + tec_sn + "/" + tec_name + "/" + courseName + "/" + "课程内容";
+        System.out.print("\n=====================\n" + resourceDir + "\n=====================\n");
+        JSONObject obj =new JSONObject();
+        obj.put("dir", resourceDir);
+        return obj.toString();
+    }
     //返回课程目录树下面列表
     @RequestMapping("/student/courdir")
     public @ResponseBody List<String> courdir(HttpServletRequest request, HttpServletResponse response) throws Exception{
-        String stsn=getCurrentUsername();
+        String stsn=AuthorityManage.getCurrentUsername();
         String scid=request.getParameter("scid");
         String dir=request.getParameter("dir");
         Teacher tec=TeacherDao.getTeacherById(TermCourseDao.getTecsnByCourseId(scid));
@@ -496,7 +562,7 @@ public class StuController {
         String collage = tec.getTeacherCollege();
         String term =TermCourseDao.getxueqiBySCId(scid).toString();
         String courseName =TermCourseDao.getCourseNameByCourseId(scid);
-        String ff=getFileFolder(request)+term +"/"+collage+"/"+tec_sn+"/"+tec_name+"/"+courseName+"/"+"课程内容"+dir;
+        String ff=getFileFolder()+term +"/"+collage+"/"+tec_sn+"/"+tec_name+"/"+courseName+"/"+"课程内容"+dir;
         String ff2="/file/"+term +"/"+collage+"/"+tec_sn+"/"+tec_name+"/"+courseName+"/"+"课程内容"+dir;
         List<String> fileList=new ArrayList<String>();   
         File f =new File(ff);
@@ -508,7 +574,7 @@ public class StuController {
         }else{         
              for (String file : files) {
                  if (file.lastIndexOf(".")!=-1) {
-                     fileList.add(file);
+                     fileList.add(ff2+file);
                  }              
              }    
          }
@@ -574,20 +640,10 @@ public class StuController {
         br.close();
         return a;
      }
-    public String getCurrentUsername() {
-      return SecurityContextHolder.getContext().getAuthentication().getName();
-   }
    public int getCurrentTerm() {
-      return 201601;
+      return CurrentInfo.getCurrentTerm();
    }
-    public String getFileFolder(HttpServletRequest request) {
-//        String uri=getClass().getResource("/").getFile();  
-//        uri=uri.replace("build/web/WEB-INF/classes/", "web/file/");
-        String path = this.getClass().getClassLoader().getResource("/").getPath();
-        System.out.println(path);
-        path=path.replace("build/web/WEB-INF/classes/", "build/web/file/");
-        System.out.println(path);
-        return path;
+    public String getFileFolder() {
+        return CurrentInfo.getFileFolder();
     }
 }
-

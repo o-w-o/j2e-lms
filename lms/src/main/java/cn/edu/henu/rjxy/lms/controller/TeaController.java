@@ -9,7 +9,7 @@ package cn.edu.henu.rjxy.lms.controller;
 import cn.edu.henu.rjxy.lms.dao.StudentDao;
 import static cn.edu.henu.rjxy.lms.dao.StudentDao.getStudentById;
 import cn.edu.henu.rjxy.lms.dao.TeacherDao;
-//import cn.edu.henu.rjxy.lms.server;
+import cn.edu.henu.rjxy.lms.dao.TempStudentDao;
 import cn.edu.henu.rjxy.lms.dao.TermCourseDao;
 import cn.edu.henu.rjxy.lms.dao.TermCourseInfoDao;
 import cn.edu.henu.rjxy.lms.model.AutoCourseNode;
@@ -20,7 +20,10 @@ import cn.edu.henu.rjxy.lms.model.StuSelectResult;
 import cn.edu.henu.rjxy.lms.model.Teacher;
 import cn.edu.henu.rjxy.lms.model.TeacherCourseResult;
 import cn.edu.henu.rjxy.lms.model.TeacherMyclassstudent;
-import cn.edu.henu.rjxy.lms.model.Tree3;
+import cn.edu.henu.rjxy.lms.model.TempStudent;
+import cn.edu.henu.rjxy.lms.server.AuthorityManage;
+import cn.edu.henu.rjxy.lms.server.CurrentInfo;
+import cn.edu.henu.rjxy.lms.server.StudentMethod;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
@@ -81,21 +84,6 @@ public class TeaController {
         
         return "teacher/mystudent";
     } 
-      @RequestMapping("teacher/resetpw_p")
-    public @ResponseBody String resetpw_p(HttpServletRequest request, HttpServletResponse response) {
-        String sn=getCurrentUsername();
-        Teacher teacher=TeacherDao.getTeacherBySn(sn);
-        String pw=request.getParameter("pw");
-        String repw=request.getParameter("repw");
-        if (!pw.equals(teacher.getTeacherPwd().toLowerCase())) {
-             return "1";}
-        if (pw.equals(repw.toLowerCase())) {
-             return "2";}
-        teacher.setTeacherPwd(repw);
-        TeacherDao.updateTeacherById(teacher);
-        return "3";
-     }
-    
     @RequestMapping("teacher/mycourse")
     public String alljsp(HttpServletRequest request,HttpServletResponse response) {
         String term = request.getParameter("term");
@@ -104,63 +92,85 @@ public class TeaController {
         request.setAttribute("term", term);
         request.setAttribute("courseid",courseid);
         request.setAttribute("courseName",courseName );
-        return "teacher/mycourse";
+        return "teacher/TCourse";
     } 
+    @RequestMapping("/teacher/pinfo")
+    public String pinfo(HttpServletRequest request, HttpServletResponse response) {
+
+        return "/teacher/PersonalInfo";
+    }
+    //返回teacher信息
+    @RequestMapping("/teacher/getpersoninfo")
+    public @ResponseBody Teacher teacherPersonalInformation(HttpServletRequest request, HttpServletResponse response) {
+        return AuthorityManage.GetTecPersonalInfo();
+    }
+     //个人信息修改提交处理
+    @RequestMapping("/teacher/updatepersoninfo")
+    public @ResponseBody String teacherUpdatePersonInfo(HttpServletRequest request, HttpServletResponse response) throws Exception {
+        return AuthorityManage.UpdateTecPersonlInfo(request, response);
+    }
+     //密码修改提交处理
+    @RequestMapping("/teacher/updatepassword")
+    public @ResponseBody String teacherUpdatePassword(HttpServletRequest request, HttpServletResponse response) {
+        return AuthorityManage.UpdateTecPassword(request, response);
+    }  
+     //更新头像id
+    @RequestMapping("/teacher/updateimgid")
+    public @ResponseBody String teacherUpdateimgid(HttpServletRequest request, HttpServletResponse response) {
+        return AuthorityManage.updateTecImgId(request, response);
+    }  
     
-    @RequestMapping("teacher/teapnda")
-    public String teacher(HttpServletRequest request,HttpServletResponse response) {
-         String sn=getCurrentUsername();
-         Teacher teacher = TeacherDao.getTeacherBySn(sn);
-         String name = teacher.getTeacherName();
-         String idCard = teacher.getTeacherIdcard();
-         String qq = teacher.getTeacherQq();
-         String tel =teacher.getTeacherTel();
-         request.setAttribute("sn", sn);
-         request.setAttribute("name",name);
-         request.setAttribute("idCard",idCard );
-         request.setAttribute("qq", qq);
-         request.setAttribute("tel", tel);
-         request.setAttribute("college", teacher.getTeacherCollege());
-         request.setAttribute("zc", teacher.getTeacherPosition());
-        return "teacher/teapnda";
-    } 
     
-    @RequestMapping("teacher/updatetea")
+     //临时学生根据学号分页
+     @RequestMapping("/teacher/ls_xs_search")
     public @ResponseBody
-        String update(HttpServletRequest request,HttpServletResponse response) {
-        String a="0";
-        System.out.println("111111111");
-        String tsn=getCurrentUsername();
-        Teacher teacher=TeacherDao.getTeacherBySn(tsn);
-        System.out.println(tsn);
-        String qq=request.getParameter("qq");
-        teacher.setTeacherQq(qq);
-        String name=request.getParameter("name");
-        teacher.setTeacherName(name);
-        String tel=request.getParameter("tel");
-        teacher.setTeacherTel(tel);
-        String idCard=request.getParameter("idCard");
-        teacher.setTeacherIdcard(idCard);
-        TeacherDao.updateTeacherById(teacher);
-        return a;
-    } 
+    JSONObject search_ls(HttpServletRequest request) {
+       int min = Integer.parseInt(request.getParameter("min"));
+       int max = Integer.parseInt(request.getParameter("max"));
+       int pc = Integer.parseInt(request.getParameter("page"));
+       int ps = Integer.parseInt(request.getParameter("rows"));
+       PageBean<TempStudent> list = TempStudentDao.findAllTempStudentBySn(min, max, pc, ps);
+        Map<String, Object> jsonMap = new HashMap<>();
+        jsonMap.put("total", list.getTr()); 
+        jsonMap.put("rows",list.getBeanList());
+        return JSONObject.fromObject(jsonMap);
+    }
+    
+       //批准临时表学生
+    @RequestMapping(value = "/teacher/pzstu", method = RequestMethod.POST)
+    public @ResponseBody String pzstu(HttpServletRequest request, @RequestParam("jssz[]") String[] params) {
+        System.out.println(params.length);
+        for (String param : params) {
+            new StudentMethod().addStudentFromtempStudent(Integer.parseInt(param));
+            TempStudentDao.deleteTempStudentById(Integer.parseInt(param)); //批准的同时删除
+        }    
+        return "批准成功！";
+    }
+    
+        //删除临时表学生
+    @RequestMapping(value="/teacher/scstu", method = RequestMethod.POST)
+    public @ResponseBody String scstu(HttpServletRequest request, @RequestParam("jssz[]") String[] params) {
+        System.out.println("删除临时表学生");
+        for (String param : params) {
+            TempStudentDao.deleteTempStudentById(Integer.parseInt(param)); //删除临时表学生
+        }    
+        return "删除成功！";
+    }
     
     //教师课程树http://localhost:8080/lms/teacher/courselist?xueqi=201602
     @RequestMapping(value = "courselist",method = RequestMethod.GET)
     public @ResponseBody List<TeacherCourseResult> courselist(HttpServletRequest request,@RequestParam ("xueqi") String xueqi) throws UnsupportedEncodingException{
       request.setCharacterEncoding("utf-8");
-       String sn=getCurrentUsername();
+       String sn=AuthorityManage.getCurrentUsername();
        Teacher tec = TeacherDao.getTeacherBySn(sn);
        System.out.println(tec.getTeacherSn());
        return  TeacherDao.getTeacherCourseByTermSn(Integer.parseInt(xueqi), tec.getTeacherSn());          
     }
-     
-    
-      
+
     //修改密码
     @RequestMapping("teacher/teaPassward")
     public @ResponseBody String teaPassward(HttpServletRequest request){
-         String sn=getCurrentUsername();
+         String sn=AuthorityManage.getCurrentUsername();
          Teacher tec = TeacherDao.getTeacherBySn(sn);
          String lastPw = request.getParameter("passPassward");
          String newPw1 = request.getParameter("passward");
@@ -184,7 +194,7 @@ public class TeaController {
           int classid = Integer.parseInt(request.getParameter("classid"));
           int course_id = Integer.parseInt(request.getParameter("course_id"));
           int term = Integer.parseInt(request.getParameter("term"));
-          String sn=getCurrentUsername();
+          String sn=AuthorityManage.getCurrentUsername();
           Teacher tec = TeacherDao.getTeacherBySn(sn);
           int tec_id = tec.getTeacherId();
           System.out.println("classid="+classid+"\n"+"course_id="+course_id+"\n"+"term="+term+"\n"+"tec_id="+tec_id);
@@ -221,8 +231,8 @@ public class TeaController {
           return JSONObject.fromObject(jg);
       }
       //删除班级学生
-      @RequestMapping("teacher/scstu")
-      public @ResponseBody String[] scstu(HttpServletRequest request,HttpServletResponse response){
+      @RequestMapping("teacher/scstustu")
+      public @ResponseBody String[] scstustu(HttpServletRequest request,HttpServletResponse response){
           String [] a =new String [1];
           a[0] = "删除成功";
           int term = Integer.parseInt(request.getParameter("term"));
@@ -230,7 +240,7 @@ public class TeaController {
           int course_id = Integer.parseInt(request.getParameter("fjd_id"));
           int Stu_id = Integer.parseInt(request.getParameter("stu_id"));
           System.out.println("term = "+term+" classid=" + classid+" course_id="+course_id+" stu_id = "+Stu_id);
-          String sn=getCurrentUsername();
+          String sn=AuthorityManage.getCurrentUsername();
           Teacher tec = TeacherDao.getTeacherBySn(sn);
           int tec_id = tec.getTeacherId();
           int trem_courseid = TermCourseDao.getTermCourseId(term, course_id, classid, tec_id);
@@ -240,25 +250,25 @@ public class TeaController {
           return a;
       }
       
-    //批准班级学生
-    @RequestMapping("teacher/pzstu")
-    public @ResponseBody String[] pzstu(HttpServletRequest request,HttpServletResponse response){
-          String [] a =new String [1];
-          a[0] = "批准班级学生成功";
-          int term = Integer.parseInt(request.getParameter("term"));
-          int classid = Integer.parseInt(request.getParameter("zjd_id"));
-          int course_id = Integer.parseInt(request.getParameter("fjd_id"));
-          int Stu_id = Integer.parseInt(request.getParameter("stu_id"));
-          System.out.println("term = "+term+" classid=" + classid+" course_id="+course_id+" stu_id = "+Stu_id);
-          String sn=getCurrentUsername();
-          Teacher tec = TeacherDao.getTeacherBySn(sn);
-          int tec_id = tec.getTeacherId();
-          int trem_courseid = TermCourseDao.getTermCourseId(term, course_id, classid, tec_id);
-          System.out.println("term_courseid= "+trem_courseid);
-          //学生ｉd和termcourseid
-          TeacherDao.updateStudentCourse(Stu_id, trem_courseid, false);
-          return a;
-      }
+//    //批准临时表的班级学生
+//    @RequestMapping("teacher/pzstu")
+//    public @ResponseBody String[] pzstu(HttpServletRequest request,HttpServletResponse response){
+//          String [] a =new String [1];
+//          a[0] = "批准班级学生成功";
+//          int term = Integer.parseInt(request.getParameter("term"));
+//          int classid = Integer.parseInt(request.getParameter("zjd_id"));
+//          int course_id = Integer.parseInt(request.getParameter("fjd_id"));
+//          int Stu_id = Integer.parseInt(request.getParameter("stu_id"));
+//          System.out.println("term = "+term+" classid=" + classid+" course_id="+course_id+" stu_id = "+Stu_id);
+//          String sn=AuthorityManage.getCurrentUsername();
+//          Teacher tec = TeacherDao.getTeacherBySn(sn);
+//          int tec_id = tec.getTeacherId();
+//          int trem_courseid = TermCourseDao.getTermCourseId(term, course_id, classid, tec_id);
+//          System.out.println("term_courseid= "+trem_courseid);
+//          //学生ｉd和termcourseid
+//          TeacherDao.updateStudentCourse(Stu_id, trem_courseid, false);
+//          return a;
+//      }
       
       //批量批准学生
        @RequestMapping("teacher/pzPLstu")
@@ -268,7 +278,7 @@ public class TeaController {
           int term = Integer.parseInt(request.getParameter("term"));
           int classid = Integer.parseInt(request.getParameter("zjdid"));
           int course_id = Integer.parseInt(request.getParameter("fjdid"));
-          String sn=getCurrentUsername();
+          String sn=AuthorityManage.getCurrentUsername();
           Teacher tec = TeacherDao.getTeacherBySn(sn);
           int tec_id = tec.getTeacherId();
           int trem_courseid = TermCourseDao.getTermCourseId(term, course_id, classid, tec_id);
@@ -281,13 +291,14 @@ public class TeaController {
       }
       
       
+
         //导出学生信息,getStuSelectByTermCourseId(trem_courseid,1,300);1表示第一页．300表示最大学生数
     @RequestMapping("teacher/xz_xs_xx")
     public @ResponseBody String daochuxuesheng(HttpServletRequest request, HttpServletResponse response) throws IOException{
           int classid = Integer.parseInt(request.getParameter("zjd_id"));
           int course_id = Integer.parseInt(request.getParameter("fjd_id"));
           int term = Integer.parseInt(request.getParameter("term"));
-          String sn=getCurrentUsername();
+          String sn=AuthorityManage.getCurrentUsername();
           Teacher tec = TeacherDao.getTeacherBySn(sn);
           int tec_id = tec.getTeacherId();
           int trem_courseid = TermCourseDao.getTermCourseId(term, course_id, classid, tec_id);
@@ -364,13 +375,7 @@ public class TeaController {
         return "1";
     
     }
-    
 
-    
-     
-  
-
-  
   //教师课程设置格式
   @RequestMapping("teacher/kcgs")
   public @ResponseBody List<AutoCourseNode> kcgs(){
@@ -441,11 +446,10 @@ public class TeaController {
      list.add(node4);
      return list;
   }
-
  //存成josn文件保存到教师目录
-  @RequestMapping(value = "saveTree",method = RequestMethod.POST)
-  public @ResponseBody String saveTree(HttpServletRequest request,@RequestBody Tree3[] users) throws Exception{
-      String sn=getCurrentUsername();
+  @RequestMapping("teacher/saveTree")
+  public @ResponseBody String saveTree(HttpServletRequest request,@RequestBody String data) throws Exception{
+      String sn=AuthorityManage.getCurrentUsername();
       Teacher tec = TeacherDao.getTeacherBySn(sn);
       String tec_sn= tec.getTeacherSn();
       String tec_name = tec.getTeacherName();
@@ -453,7 +457,7 @@ public class TeaController {
       String term = request.getParameter("term");
       String courseName = request.getParameter("courseName");
       // .../学期/学院／教师工号／教师姓名／课程名称 //课程目录结构
-      File f = new File(getFileFolder(request)+term +"/"+collage+"/"+tec_sn+"/"+tec_name+"/"+courseName+"/"+"课程目录结构"+"/");
+      File f = new File(getFileFolder()+term +"/"+collage+"/"+tec_sn+"/"+tec_name+"/"+courseName+"/"+"课程目录结构"+"/");
       //判断目录是否存在，不存在则创建
       if(!f.exists()&&!f.isDirectory()){
           System.out.println("不存在");
@@ -461,36 +465,37 @@ public class TeaController {
       }else{
           System.out.println("存在");
       }
-    String ff = getFileFolder(request)+term +"/"+collage+"/"+tec_sn+"/"+tec_name+"/"+courseName+"/"+"课程目录结构"+"/";
+    String ff = getFileFolder()+term +"/"+collage+"/"+tec_sn+"/"+tec_name+"/"+courseName+"/"+"课程目录结构"+"/";
     List list =new LinkedList();
-    String ss = "",aa;
-    for(int i =0;i < users.length-1;i++){
-        list.add(users[i]); 
-        aa = JSONObject.fromObject(users[i])+"";
-        ss +=aa+',';
-    }
-    aa = JSONObject.fromObject(users[3])+"";
-    ss = ss+aa;
-    ss= '['+ss+']';
-    System.out.println(ss);
+//    String ss = "",aa;
+//    for(int i =0;i < users.length-1;i++){
+//        list.add(users[i]); 
+//        aa = JSONObject.fromObject(users[i])+"";
+//        ss +=aa+',';
+//    }
+//    aa = JSONObject.fromObject(users[users.length-1])+"";
+//    ss = ss+aa;
+//    ss= '['+ss+']';
+    System.out.println(data);
     OutputStreamWriter pw = null;//定义一个流
     pw = new OutputStreamWriter(new FileOutputStream(new File(ff+File.separator+"test.json")),"GBK");
-    pw.write(ss);
+    pw.write(data);
     pw.close();
     return "1";
   }
+ 
   
   //解析josn文件生成树
   @RequestMapping("teacher/scTree")
   public @ResponseBody String scTree(HttpServletRequest request) throws FileNotFoundException, IOException{
-      String sn=getCurrentUsername();
+      String sn=AuthorityManage.getCurrentUsername();
       Teacher tec = TeacherDao.getTeacherBySn(sn);
       String tec_sn= tec.getTeacherSn();
       String tec_name = tec.getTeacherName();
       String collage = tec.getTeacherCollege();
       String term = request.getParameter("term");
       String courseName = request.getParameter("courseName");
-      String ff = getFileFolder(request)+term +"/"+collage+"/"+tec_sn+"/"+tec_name+"/"+courseName+"/"+"课程目录结构"+"/"+"test.json";
+      String ff = getFileFolder()+term +"/"+collage+"/"+tec_sn+"/"+tec_name+"/"+courseName+"/"+"课程目录结构"+"/"+"test.json";
       String fileContent = "";    
        try{      
         File f = new File(ff);     
@@ -510,19 +515,18 @@ public class TeaController {
       System.out.println(fileContent);   
       return fileContent;
   }
-  
-  
+
   //检查老师是否设置过课程目录
   @RequestMapping("teacher/lookMulu")
   public @ResponseBody String lookMulu(HttpServletRequest request){
-      String sn=getCurrentUsername();
+      String sn=AuthorityManage.getCurrentUsername();
       Teacher tec = TeacherDao.getTeacherBySn(sn);
       String tec_sn= tec.getTeacherSn();
       String tec_name = tec.getTeacherName();
       String collage = tec.getTeacherCollege();
       String term = request.getParameter("term");
       String courseName = request.getParameter("courseName");
-      String ff = getFileFolder(request)+term +"/"+collage+"/"+tec_sn+"/"+tec_name+"/"+courseName+"/"+"课程目录结构"+"/"+"test.json";
+      String ff = getFileFolder()+term +"/"+collage+"/"+tec_sn+"/"+tec_name+"/"+courseName+"/"+"课程目录结构"+"/"+"test.json";
       File f =new File(ff);
       if(!f.exists()){
           return "0";//不存在
@@ -533,7 +537,7 @@ public class TeaController {
   //课程内容树的删除
   @RequestMapping("teacher/kcnr_sc")
   public @ResponseBody String kcnr_sc(HttpServletRequest request){
-     String sn=getCurrentUsername();
+     String sn=AuthorityManage.getCurrentUsername();
      Teacher tec = TeacherDao.getTeacherBySn(sn);
      String tec_sn= tec.getTeacherSn();
      String tec_name = tec.getTeacherName();
@@ -543,7 +547,7 @@ public class TeaController {
      String node1 = request.getParameter("node1");
      String node2 = request.getParameter("node2");
      String node3 = request.getParameter("node3");
-     String ff = getFileFolder(request)+term +"/"+collage+"/"+tec_sn+"/"+tec_name+"/"+courseName+"/"+"课程内容"+"/";
+     String ff = getFileFolder()+term +"/"+collage+"/"+tec_sn+"/"+tec_name+"/"+courseName+"/"+"课程内容"+"/";
      if(node3.endsWith("null")){//2
         ff = ff+"/"+node1+"/"+node2+"/"; 
         File f = new File(ff);
@@ -569,7 +573,7 @@ public class TeaController {
   @RequestMapping("teacher/kcnr_submit")
   public @ResponseBody String[] kcnr_submit(HttpServletRequest request) throws IOException, FileUploadException, Exception{
      String []s=new String[1];
-     String sn=getCurrentUsername();
+     String sn=AuthorityManage.getCurrentUsername();
      Teacher tec = TeacherDao.getTeacherBySn(sn);
      String tec_sn= tec.getTeacherSn();
      String tec_name = tec.getTeacherName();
@@ -580,7 +584,7 @@ public class TeaController {
      String node2 = request.getParameter("node2");
      String node3 = request.getParameter("node3");
      System.out.println(node1 + " "+ node2+"  "+node3+"  "+term+"  "+courseName);
-     String ff = getFileFolder(request)+term +"/"+collage+"/"+tec_sn+"/"+tec_name+"/"+courseName+"/"+"课程内容"+"/";
+     String ff = getFileFolder()+term +"/"+collage+"/"+tec_sn+"/"+tec_name+"/"+courseName+"/"+"课程内容"+"/";
      if(node2.equals("undefined")&&node3.equals("undefined")){//1
          ff = ff+node1;
       }else if(node3.equals("undefined")&&(!node2.equals("undefined"))){//2
@@ -606,14 +610,13 @@ public class TeaController {
 //        System.out.println("上传课程内容 路径："+file.getOriginalFilename());
 //        DocConverter dc=new DocConverter(f+"/"+file.getOriginalFilename());
 //        boolean res=dc.conver();
-//        String swftmp=(f+"/"+file.getOriginalFilename()).replace(getFileFolder(request), "");
+//        String swftmp=(f+"/"+file.getOriginalFilename()).replace(getFileFolder(), "");
 //        swftmp=swftmp.substring(0,swftmp.lastIndexOf("."))+".swf";
 //        if (res){
 //            System.out.println("转换为flash成功。网页引用地址:http://localhost:8080/Web/getswf?uri="+swftmp);
 //        }
       return s;
   }
-  
   
   //更新课程介绍
   @RequestMapping("teacher/addcourseinfo")
@@ -643,10 +646,10 @@ public class TeaController {
      String []a = new String[1];
      String term = request.getParameter("term");
      String coursename = request.getParameter("coursename");
-     String sn=getCurrentUsername();
+     String sn=AuthorityManage.getCurrentUsername();
      Teacher tec = TeacherDao.getTeacherBySn(sn);
      String collage = tec.getTeacherCollege();
-     String ff = getFileFolder(request)+term +"/"+collage+"/"+coursename+"/"+"课程大纲"; 
+     String ff = getFileFolder()+term +"/"+collage+"/"+coursename+"/"+"课程大纲"; 
      File f = new File(ff);
      if(!f.exists()&&!f.isDirectory()){
           a[0]="0";
@@ -660,7 +663,7 @@ public class TeaController {
   @RequestMapping("teacher/courdir")
   public @ResponseBody String[] courdir(HttpServletRequest request){
      String []s=new String[4];
-     String sn=getCurrentUsername();
+     String sn=AuthorityManage.getCurrentUsername();
      Teacher tec = TeacherDao.getTeacherBySn(sn);
      String tec_sn= tec.getTeacherSn();
      String tec_name = tec.getTeacherName();
@@ -670,13 +673,22 @@ public class TeaController {
      String node1 = request.getParameter("node1");
      String node2 = request.getParameter("node2");
      String node3 = request.getParameter("node3");
-     System.out.println(node1 + " "+ node2+"  "+node3+"  "+term+"  "+courseName);
-     String dir = term +"/"+collage+"/"+tec_sn+"/"+tec_name+"/"+courseName+"/"+"课程内容"+"/"+node1+"/"+node2+"/"+node3+"/";
-     String ff = getFileFolder(request)+term +"/"+collage+"/"+tec_sn+"/"+tec_name+"/"+courseName+"/"+"课程内容"+"/";
-     ff=ff+node1+"/"+node2+"/"+node3+"/";
-     String ff2="../file/"+dir;
+     String dir="",ff=null;
+     if(!node2.equals("null")&&!node3.equals("null")){
+        dir = node1+"/"+node2+"/"+node3+"/";
+        ff= node1+"/"+node2+"/"+node3+"/";
+     }else if(!node2.equals("null")&&node3.equals("null")){
+        dir =node1+"/"+node2+"/";
+        ff= node1+"/"+node2+"/";
+     }else if(node2.equals("null")&&node3.equals("null")){
+        dir = node1+"/";
+        ff= node1+"/";
+     }
+     dir = term +"/"+collage+"/"+tec_sn+"/"+tec_name+"/"+courseName+"/"+"课程内容"+"/"+dir;
+     ff = getFileFolder()+term +"/"+collage+"/"+tec_sn+"/"+tec_name+"/"+courseName+"/"+"课程内容"+"/"+ff;
+     System.out.println("dir="+dir);
      String ff3="../"+"getswf?uri="+dir;
-     String ff4="../getvideo?uri="+dir;
+     String ff4="../"+"getvideo?uri="+dir;
      String []a = new String[1];
      a[0]="";
      String dlc="";
@@ -689,20 +701,19 @@ public class TeaController {
              a[0]="<ol class=\"breadcrumb\" id=\"breadcour\"><p>此目录下暂无资源</p></ol>";
          }else{
              boolean swf=false;
-             boolean ddoc=false;
-             
+             boolean ddoc=false;   
              for (String file : files) {
                  System.out.println(file);
                  if (file.lastIndexOf(".")!=-1) {
                      if((file.substring(file.lastIndexOf("."), file.length())).toLowerCase().equals(".swf")){
                  swf=true;
-                 a[0]=a[0]+"<li><a href=\""+ff3+file+"\" target=\"swfplayer\" onclick=\"setheight()\">"+file+"</a>&nbsp;<a  onclick=\"kcdg_sc('"+file+"')\">"+"删除"+"</a></li>";
+                 a[0]=a[0]+"<li><a href=\""+ff3+file+"\" target=\"swfplayer\" onclick=\"showSwfPlayer()\">"+file+"</a>&nbsp;<a  onclick=\"kcnrfj_sc('"+file+"')\">"+"删除"+"</a></li>";
                      }else if((file.substring(file.lastIndexOf("."), file.length())).toLowerCase().equals(".mp4")){
                  swf=true;
-                 a[0]=a[0]+"<li><a href=\""+ff4+file+"\" target=\"swfplayer\" onclick=\"setheight()\">"+file+"</a>&nbsp;<a  onclick=\"kcdg_sc('"+file+"')\">"+"删除"+"</a></li>";   
+                 a[0]=a[0]+"<li><a href=\""+ff4+file+"\" target=\"swfplayer\" onclick=\"showSwfPlayer()\">"+file+"</a>&nbsp;<a  onclick=\"kcnrfj_sc('"+file+"')\">"+"删除"+"</a></li>";   
                      }else{
                  ddoc=true;
-                 dlc=dlc+"<li><a href=\""+ff2+file+"\">"+file+"</a>&nbsp;<a  onclick=\"kcdg_sc('"+file+"')\">"+"删除"+"</a></li>";
+                 dlc=dlc+"<li><a  onclick=\"kcnrxz('"+dir+file+"')\">"+file+"</a>&nbsp;<a  onclick=\"kcnrfj_sc('"+file+"')\">"+"删除"+"</a></li>";
                  }
                  }
              }
@@ -719,21 +730,21 @@ public class TeaController {
  public @ResponseBody String[] lookDGwork(HttpServletRequest request){
      String term = request.getParameter("term");
      String coursename = request.getParameter("coursename");
-     String sn=getCurrentUsername();
+     String sn=AuthorityManage.getCurrentUsername();
      Teacher tec = TeacherDao.getTeacherBySn(sn);
      String tec_sn= tec.getTeacherSn();
      String tec_name = tec.getTeacherName();
      String collage = tec.getTeacherCollege();
-     String ff = getFileFolder(request)+term +"/"+collage+"/"+coursename+"/"+"课程大纲";
+     String ff = getFileFolder()+term +"/"+collage+"/"+coursename+"/"+"课程大纲";
      String s[] = new String[2];
      int length= haveFile(ff);
-     if(length==0){s[0]=""+"<ol class=\"breadcrumb\" id=\"breadcour\"><p>暂时无附件,你可以选择附件上传</p></ol>";s[1]="0";return s;}
+     if(length==0){s[0]=""+"<ol class=\"breadcrumb\" id=\"breadcour\"><p>暂时无附件</p></ol>";s[1]="0";return s;}
      String a,b;
      if(readname(ff,2)[0].endsWith(".swf")){a = readname(ff,2)[1];b = readname(ff,2)[0];}else{ a = readname(ff,2)[0];b = readname(ff,2)[1];}
      b =term +"/"+collage+"/"+coursename+"/"+"课程大纲"+"/"+ b;
-     String ff2="../file/"+term +"/"+collage+"/"+coursename+"/"+"课程大纲/"+a;
-     s[0] = "<li><a href=\""+ff2+"\">"+a+"</a>&nbsp;<a  onclick=\"scfj()\">"+"删除"+"</a>&nbsp;<a  onclick=\"dgyl('"+b+"')\">"+"预览"+"</a>&nbsp;<a  onclick=\"gbdgyl()\">"+"关闭预览"+"</a>";
-     s[0]= "<ol class=\"breadcrumb\" id=\"breadcour\"><p>​课程大纲附件，你可以点击下载,删除</p>"+s[0]+"</ol>";
+     String ff2=term +"/"+collage+"/"+coursename+"/"+"课程大纲/"+a;
+     s[0] = "<li><a onclick=\"dgxz('"+ff2+"')\">"+a+"</a>&nbsp;<a  onclick=\"scfj()\">"+"删除"+"</a>&nbsp;<a  onclick=\"dgyl('"+b+"')\">"+"预览"+"</a>&nbsp;<a  onclick=\"gbdgyl()\">"+"关闭预览"+"</a>";
+     s[0]= "<ol class=\"breadcrumb\" id=\"breadcour\"><p>​课程大纲附件：</p>"+s[0]+"</ol>";
      s[1]="1";
      return s;
  }
@@ -766,9 +777,9 @@ public class TeaController {
   public @ResponseBody String lookisCourseMaster(HttpServletRequest request,HttpServletResponse response){
      String term = request.getParameter("term");
      String courseid = request.getParameter("courseid");
-     String sn=getCurrentUsername();
+     String sn=AuthorityManage.getCurrentUsername();
      Teacher tec = TeacherDao.getTeacherBySn(sn);
-     if(TeacherDao.isCourseMaster(Integer.parseInt(term), Integer.parseInt(courseid),tec.getTeacherId())==false){
+     if(TeacherDao.isCourseMaster(Integer.parseInt(term), tec.getTeacherId() , Integer.parseInt(courseid))==false){
        return "0";//不是课程负责人
      }
      return "1";//是课程负责人
@@ -777,8 +788,9 @@ public class TeaController {
   //课件删除
   @RequestMapping("teacher/kcsc")
   public @ResponseBody String[] kcsc(HttpServletRequest request,HttpServletResponse response){
-      String []a = new String[1];
-     String sn=getCurrentUsername();
+     System.out.println("课件删除");
+     String []a = new String[1];
+     String sn=AuthorityManage.getCurrentUsername();
      Teacher tec = TeacherDao.getTeacherBySn(sn);
      String tec_sn= tec.getTeacherSn();
      String tec_name = tec.getTeacherName();
@@ -789,21 +801,30 @@ public class TeaController {
      String node1 = request.getParameter("node1");
      String node2 = request.getParameter("node2");
      String node3 = request.getParameter("node3");
-     String ff = getFileFolder(request)+term +"/"+collage+"/"+tec_sn+"/"+tec_name+"/"+courseName+"/"+"课程内容";
-     ff = ff+"/"+node1+"/"+node2+"/"+node3+"/"; 
+     String ff = getFileFolder()+term +"/"+collage+"/"+tec_sn+"/"+tec_name+"/"+courseName+"/"+"课程内容"; 
+     if(!node2.equals("null")&&!node3.equals("null")){
+       ff = ff+"/"+node1+"/"+node2+"/"+node3+"/";
+     }else if(!node2.equals("null")&&node3.equals("null")){
+       ff = ff+"/"+node1+"/"+node2+"/";
+     }else  if(node2.equals("null")&&node3.equals("null")){
+        ff = ff+"/"+node1+"/";
+     }
+     
      String a1 = ff+filename;//要删除的文件 
 //     String a2 = ff+getFileNameNoEx(filename)+".swf";//判断是否有swf
+      System.out.println("a1="+a1);
      File f =new File(a1);
      if(f.exists()){//删除文件
             f.delete();
+            a[0]="1";
             System.out.println("no");
      }else{
        a[0] = "0";
      }
-     return a;    
+    
+     return a;   
   }
-  
-  
+
   //作业要求上传
   @RequestMapping("teacher/work")
   public @ResponseBody String work(HttpServletRequest request) throws IOException{
@@ -814,11 +835,11 @@ public class TeaController {
       String miaoshu = request.getParameter("miaoshu");
       String coursename =request.getParameter("courseName");
       String term = request.getParameter("term");
-      String tec_name =TeacherDao.getTeacherBySn(getCurrentUsername()).getTeacherName();
-      String collage = TeacherDao.getTeacherBySn(getCurrentUsername()).getTeacherCollege();
-      String sn = getCurrentUsername();
+      String tec_name =TeacherDao.getTeacherBySn(AuthorityManage.getCurrentUsername()).getTeacherName();
+      String collage = TeacherDao.getTeacherBySn(AuthorityManage.getCurrentUsername()).getTeacherCollege();
+      String sn = AuthorityManage.getCurrentUsername();
        //                                 学期　     工号　   姓名　          课程名
-       String ff = getFileFolder(request)+"homework/"+term +"/"+collage+"/"+sn+"/"+tec_name+"/"+coursename+"/";
+       String ff = getFileFolder()+"homework/"+term +"/"+collage+"/"+sn+"/"+tec_name+"/"+coursename+"/";
        file(ff);//判断目录是否存在，不存在则创建
        length = haveFile(ff);
        ff=ff+(length+1)+"/";
@@ -849,11 +870,11 @@ public class TeaController {
       String coursename =request.getParameter("courseName");
       String term = request.getParameter("term");
       String id = request.getParameter("id");
-      String tec_name =TeacherDao.getTeacherBySn(getCurrentUsername()).getTeacherName();
-      String collage = TeacherDao.getTeacherBySn(getCurrentUsername()).getTeacherCollege();
-      String sn = getCurrentUsername();
+      String tec_name =TeacherDao.getTeacherBySn(AuthorityManage.getCurrentUsername()).getTeacherName();
+      String collage = TeacherDao.getTeacherBySn(AuthorityManage.getCurrentUsername()).getTeacherCollege();
+      String sn = AuthorityManage.getCurrentUsername();
        //                                 学期　     工号　   姓名　          课程名
-      String ff = getFileFolder(request)+"homework/"+term +"/"+collage+"/"+sn+"/"+tec_name+"/"+coursename+"/"+id+"/";
+      String ff = getFileFolder()+"homework/"+term +"/"+collage+"/"+sn+"/"+tec_name+"/"+coursename+"/"+id+"/";
       
        //写入作业要求html
        OutputStreamWriter pw = null;
@@ -876,11 +897,11 @@ public class TeaController {
      String workid =request.getParameter("workid");
      String coursename =request.getParameter("courseName");
      String term = request.getParameter("term"); 
-     String tec_name =TeacherDao.getTeacherBySn(getCurrentUsername()).getTeacherName();
-     String sn = getCurrentUsername();
-     String collage = TeacherDao.getTeacherBySn(getCurrentUsername()).getTeacherCollege();
+     String tec_name =TeacherDao.getTeacherBySn(AuthorityManage.getCurrentUsername()).getTeacherName();
+     String sn = AuthorityManage.getCurrentUsername();
+     String collage = TeacherDao.getTeacherBySn(AuthorityManage.getCurrentUsername()).getTeacherCollege();
        //                                 学期　     工号　   姓名　          课程名
-     String ff = getFileFolder(request)+"homework/"+term +"/"+collage+"/"+sn+"/"+tec_name+"/"+coursename+"/"+workid+"/"+1+"/";
+     String ff = getFileFolder()+"homework/"+term +"/"+collage+"/"+sn+"/"+tec_name+"/"+coursename+"/"+workid+"/"+1+"/";
      file(ff);//判断目录是否存在，不存在则创建
      if(haveFile(ff)!=0){return "0";}
      File f = new File(ff);
@@ -905,7 +926,7 @@ public class TeaController {
       return "1";
 
   }
-  
+
   @RequestMapping("teacher/homework_submit")
   public @ResponseBody String homework_submit(HttpServletRequest request,@RequestParam("file") MultipartFile file) throws FileNotFoundException, IOException{
      int length = 0;
@@ -914,11 +935,11 @@ public class TeaController {
      String miaoshu = request.getParameter("miaoshu");
      String coursename =request.getParameter("courseName");
      String term = request.getParameter("term"); 
-     String tec_name =TeacherDao.getTeacherBySn(getCurrentUsername()).getTeacherName();
-     String sn = getCurrentUsername();
-     String collage = TeacherDao.getTeacherBySn(getCurrentUsername()).getTeacherCollege();
+     String tec_name =TeacherDao.getTeacherBySn(AuthorityManage.getCurrentUsername()).getTeacherName();
+     String sn = AuthorityManage.getCurrentUsername();
+     String collage = TeacherDao.getTeacherBySn(AuthorityManage.getCurrentUsername()).getTeacherCollege();
        //                                 学期　     工号　   姓名　          课程名
-     String ff = getFileFolder(request)+"homework/"+term +"/"+collage+"/"+sn+"/"+tec_name+"/"+coursename+"/";
+     String ff = getFileFolder()+"homework/"+term +"/"+collage+"/"+sn+"/"+tec_name+"/"+coursename+"/";
      file(ff);//判断目录是否存在，不存在则创建
      length = haveFile(ff);
      ff=ff+(length+1)+"/";
@@ -962,10 +983,10 @@ public class TeaController {
       int length = 0;
       String coursename =request.getParameter("courseName");
       String term = request.getParameter("term");
-      String tec_name =TeacherDao.getTeacherBySn(getCurrentUsername()).getTeacherName();
-      String sn = getCurrentUsername();
-      String colage = TeacherDao.getTeacherBySn(getCurrentUsername()).getTeacherCollege();
-      String ff = getFileFolder(request)+"homework/"+term +"/"+colage+"/"+sn+"/"+tec_name+"/"+coursename+"/";
+      String tec_name =TeacherDao.getTeacherBySn(AuthorityManage.getCurrentUsername()).getTeacherName();
+      String sn = AuthorityManage.getCurrentUsername();
+      String colage = TeacherDao.getTeacherBySn(AuthorityManage.getCurrentUsername()).getTeacherCollege();
+      String ff = getFileFolder()+"homework/"+term +"/"+colage+"/"+sn+"/"+tec_name+"/"+coursename+"/";
       System.out.println(haveFile(ff));
       length = haveFile(ff);
       a[0] = length+"";//返回长度
@@ -984,10 +1005,10 @@ public class TeaController {
       String coursename =request.getParameter("courseName");
       String term = request.getParameter("term");
       String id = request.getParameter("id");
-      String tec_name =TeacherDao.getTeacherBySn(getCurrentUsername()).getTeacherName();
-      String sn = getCurrentUsername();
-      String colage = TeacherDao.getTeacherBySn(getCurrentUsername()).getTeacherCollege();
-      String ff = getFileFolder(request)+"homework/"+term +"/"+colage+"/"+sn+"/"+tec_name+"/"+coursename+"/"+id+"/";
+      String tec_name =TeacherDao.getTeacherBySn(AuthorityManage.getCurrentUsername()).getTeacherName();
+      String sn = AuthorityManage.getCurrentUsername();
+      String colage = TeacherDao.getTeacherBySn(AuthorityManage.getCurrentUsername()).getTeacherCollege();
+      String ff = getFileFolder()+"homework/"+term +"/"+colage+"/"+sn+"/"+tec_name+"/"+coursename+"/"+id+"/";
       String a = read(ff+"/"+"textWork.html");
       String a2 =  readline(ff+"/"+"Workall.txt")[1];//endtime
       String a3 =  readline(ff+"/"+"Workall.txt")[2];//starttime
@@ -995,14 +1016,14 @@ public class TeaController {
       String []b = new String[4];
       b[0] = a;//作业要求
       b[1] = a2;//作业截至时间
-      b[2] = a3;
+      b[2] = a3;////starttime
       if(length==1){
            String a1 = readname(ff+"/"+1+"/", 1)[0];
            String ff2="../file/"+"homework"+"/"+term +"/"+colage+"/"+sn+"/"+tec_name+"/"+coursename+"/"+id+"/"+1+"/";
            ff2=ff2+a1;
            String c;
-           c = "<li style=\"width:300px\"><a href=\""+ff2+"\">"+a1+"</a>&nbsp;<a  onclick=\"sczyfj()\">"+"删除"+"</a></li>";
-           c = "<ol class=\"breadcrumb\" id=\"breadcour\"><p>​附件，你可以点击下载,删除</p>"+c+"</ol>";
+           c = "<li ><a href=\""+ff2+"\">"+a1+"</a>&nbsp;&nbsp;&nbsp;&nbsp;<a  onclick=\"sczyfj()\">"+"删除"+"</a></li>";
+           c = "<ol class=\"breadcrumb\" id=\"breadcour\"><p>​附件：</p>"+c+"</ol>";
            b[3] = c;
       }else{b[3]="2";}
       return b;
@@ -1013,10 +1034,10 @@ public class TeaController {
       String coursename =request.getParameter("courseName");
       String term = request.getParameter("term");
       String id = request.getParameter("id");
-      String tec_name =TeacherDao.getTeacherBySn(getCurrentUsername()).getTeacherName();
-      String sn = getCurrentUsername();
-      String colage = TeacherDao.getTeacherBySn(getCurrentUsername()).getTeacherCollege();
-      String ff = getFileFolder(request)+"homework/"+term +"/"+colage+"/"+sn+"/"+tec_name+"/"+coursename+"/"+id+"/";
+      String tec_name =TeacherDao.getTeacherBySn(AuthorityManage.getCurrentUsername()).getTeacherName();
+      String sn = AuthorityManage.getCurrentUsername();
+      String colage = TeacherDao.getTeacherBySn(AuthorityManage.getCurrentUsername()).getTeacherCollege();
+      String ff = getFileFolder()+"homework/"+term +"/"+colage+"/"+sn+"/"+tec_name+"/"+coursename+"/"+id+"/";
       int length = haveFile(ff+"/"+1+"/");
       if(length==1){
        File f = new File(ff+"/"+1+"/"); 
@@ -1036,10 +1057,10 @@ public class TeaController {
       String coursename =request.getParameter("courseName");
       String term = request.getParameter("term");
       String id = request.getParameter("id");
-      String tec_name =TeacherDao.getTeacherBySn(getCurrentUsername()).getTeacherName();
-      String sn = getCurrentUsername();
-      String colage = TeacherDao.getTeacherBySn(getCurrentUsername()).getTeacherCollege();
-      String ff = getFileFolder(request)+"uploadhomework/"+term +"/"+colage+"/"+sn+"/"+tec_name+"/"+coursename+"/"+id+"/";
+      String tec_name =TeacherDao.getTeacherBySn(AuthorityManage.getCurrentUsername()).getTeacherName();
+      String sn = AuthorityManage.getCurrentUsername();
+      String colage = TeacherDao.getTeacherBySn(AuthorityManage.getCurrentUsername()).getTeacherCollege();
+      String ff = getFileFolder()+"uploadhomework/"+term +"/"+colage+"/"+sn+"/"+tec_name+"/"+coursename+"/"+id+"/";
       File file=new File(ff);
       if(!file.exists()&&!file.isDirectory()){
            c[0]= "0";
@@ -1053,7 +1074,13 @@ public class TeaController {
       for (int i = 0; i < tempList.length; i++) {//循环这个数组
         if (tempList[i].isDirectory()) {//根据需要取出文件夹
            String a =tempList[i].toString();
-           temp = a.substring(a.lastIndexOf("/")+1);
+           System.out.println("a="+a);
+           if(a.indexOf("\\") != -1){  
+              temp = a.substring(a.lastIndexOf("\\")+1);
+            } else{
+              temp = a.substring(a.lastIndexOf("/")+1);
+            }  
+           System.out.println("temp="+temp);
            b[i] =  " <a onclick=\"czxs('"+temp+"')\" >"+temp+"</a>"; 
            allString=allString+b[i];
         }
@@ -1062,6 +1089,7 @@ public class TeaController {
       if(tempList.length==0){
          b[0] = "0";
       }
+      System.out.println("b[0]="+b[0]);
       return b;
   }
   
@@ -1073,10 +1101,10 @@ public class TeaController {
       String coursename =request.getParameter("courseName");
       String term = request.getParameter("term");
       String id = request.getParameter("id");
-      String tec_name =TeacherDao.getTeacherBySn(getCurrentUsername()).getTeacherName();
-      String sn = getCurrentUsername();
-      String colage = TeacherDao.getTeacherBySn(getCurrentUsername()).getTeacherCollege();
-      String ff = getFileFolder(request)+"uploadhomework/"+term +"/"+colage+"/"+sn+"/"+tec_name+"/"+coursename+"/"+id+"/"+clsssname+"/";
+      String tec_name =TeacherDao.getTeacherBySn(AuthorityManage.getCurrentUsername()).getTeacherName();
+      String sn = AuthorityManage.getCurrentUsername();
+      String colage = TeacherDao.getTeacherBySn(AuthorityManage.getCurrentUsername()).getTeacherCollege();
+      String ff = getFileFolder()+"uploadhomework/"+term +"/"+colage+"/"+sn+"/"+tec_name+"/"+coursename+"/"+id+"/"+clsssname+"/";
       String ff2="../file/"+"uploadhomework/"+term +"/"+colage+"/"+sn+"/"+tec_name+"/"+coursename+"/"+id+"/"+clsssname+"/";
       int length = haveFile(ff);//班级目录下学生长度
       String []b = new String[length+1];
@@ -1087,8 +1115,14 @@ public class TeaController {
       for (int i = 0; i < tempList.length; i++) {//循环这个数组
         if (tempList[i].isDirectory()) {//根据需要取出文件夹
            String a =tempList[i].toString();
-           temp = a.substring(a.lastIndexOf("/")+1);//学号
-           String fileStudentPath = ff+"/"+temp;
+            String fileStudentPath = null;
+             if(a.indexOf("\\") != -1){  
+              temp = a.substring(a.lastIndexOf("\\")+1);
+              fileStudentPath = ff+"\\"+temp;
+            } else{
+              temp = a.substring(a.lastIndexOf("/")+1);
+               fileStudentPath = ff+"/"+temp;
+            }  
            int studentWorkLength = haveFile(fileStudentPath);//学生作业文件总长度
            String stu_name =StudentDao.getStudentBySn(temp).getStudentName();//学生姓名  
            String []ld=new String[studentWorkLength];
@@ -1159,6 +1193,7 @@ public class TeaController {
       }
       b[length]=length+"";
       if(!"".equals(allString)){ b[0]=allString;}
+      System.out.println("b="+b[0]);
     return b;
   }
   //下载全部作业
@@ -1167,13 +1202,13 @@ public class TeaController {
         String term = request.getParameter("term");
         String courseName = request.getParameter("courseName");
         String workid = request.getParameter("workid");
-        String sn = getCurrentUsername();
-        String collage = TeacherDao.getTeacherBySn(getCurrentUsername()).getTeacherCollege();
-        String teacherName = TeacherDao.getTeacherBySn(getCurrentUsername()).getTeacherName();
-        String path=getFileFolder(request)+"uploadhomework/"+term+"/"+collage+"/"+sn+"/"+teacherName+"/"+courseName+"/"+workid+"/"; // 压缩的目录
+        String sn = AuthorityManage.getCurrentUsername();
+        String collage = TeacherDao.getTeacherBySn(AuthorityManage.getCurrentUsername()).getTeacherCollege();
+        String teacherName = TeacherDao.getTeacherBySn(AuthorityManage.getCurrentUsername()).getTeacherName();
+        String path=getFileFolder()+"uploadhomework/"+term+"/"+collage+"/"+sn+"/"+teacherName+"/"+courseName+"/"+workid+"/"; // 压缩的目录
         String fileNamelast = workid+".zip";//下载的文件名
-        file( getFileFolder(request)+"uploadhomework/"+term+"/"+collage+"/"+sn+"/"+teacherName+"/"+"临时压缩");
-        String compress = getFileFolder(request)+"uploadhomework/"+term+"/"+collage+"/"+sn+"/"+teacherName+"/"+"临时压缩"+"/"+fileNamelast;
+        file( getFileFolder()+"uploadhomework/"+term+"/"+collage+"/"+sn+"/"+teacherName+"/"+"临时压缩");
+        String compress = getFileFolder()+"uploadhomework/"+term+"/"+collage+"/"+sn+"/"+teacherName+"/"+"临时压缩"+"/"+fileNamelast;
         //压缩后下载
         ZipCompressor zc = new ZipCompressor(compress);//压缩的位置   
         zc.compress(path,"","");  //压缩一个目录，，压缩后文件不删除，下次压缩自动替换
@@ -1195,13 +1230,13 @@ public class TeaController {
         String courseName = request.getParameter("courseName");
         String workid = request.getParameter("workid");
         String classname = request.getParameter("classname");
-        String sn = getCurrentUsername();
-        String collage = TeacherDao.getTeacherBySn(getCurrentUsername()).getTeacherCollege();
-        String teacherName = TeacherDao.getTeacherBySn(getCurrentUsername()).getTeacherName();
-        String path=getFileFolder(request)+"uploadhomework/"+term+"/"+collage+"/"+sn+"/"+teacherName+"/"+courseName+"/"+workid+"/"+classname+"/"; // 压缩的目录
+        String sn = AuthorityManage.getCurrentUsername();
+        String collage = TeacherDao.getTeacherBySn(AuthorityManage.getCurrentUsername()).getTeacherCollege();
+        String teacherName = TeacherDao.getTeacherBySn(AuthorityManage.getCurrentUsername()).getTeacherName();
+        String path=getFileFolder()+"uploadhomework/"+term+"/"+collage+"/"+sn+"/"+teacherName+"/"+courseName+"/"+workid+"/"+classname+"/"; // 压缩的目录
         String fileNamelast = classname+".zip";//下载的文件名
-        file( getFileFolder(request)+"uploadhomework/"+term+"/"+collage+"/"+sn+"/"+teacherName+"/"+"临时压缩");
-        String compress = getFileFolder(request)+"uploadhomework/"+term+"/"+collage+"/"+sn+"/"+teacherName+"/"+"临时压缩"+"/"+fileNamelast;
+        file( getFileFolder()+"uploadhomework/"+term+"/"+collage+"/"+sn+"/"+teacherName+"/"+"临时压缩");
+        String compress = getFileFolder()+"uploadhomework/"+term+"/"+collage+"/"+sn+"/"+teacherName+"/"+"临时压缩"+"/"+fileNamelast;
         //压缩后下载
         ZipCompressor zc = new ZipCompressor(compress);//压缩的位置   
         zc.compress(path,"","");  //压缩一个目录，，压缩后文件不删除，下次压缩自动替换
@@ -1216,14 +1251,29 @@ public class TeaController {
                                                  headers, HttpStatus.CREATED);    
     }    
 
+      //下载当前班级的提交作业
+   @RequestMapping("teacher/downloadDG")    
+    public ResponseEntity<byte[]> downloadDG(HttpServletRequest request,HttpServletResponse response) throws IOException {  
+        String path = request.getParameter("temp");
+        String filename =path.substring(path.lastIndexOf("/"));
+        String compress = getFileFolder()+path;   
+        File file=new File(compress);  
+        HttpHeaders headers = new HttpHeaders();    
+        String fileName=new String(filename.getBytes("UTF-8"),"iso-8859-1");//为了解决中文名称乱码问题  
+        headers.setContentDispositionFormData("attachment", fileName);   
+        headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);   
+        return new ResponseEntity<byte[]>(FileUtils.readFileToByteArray(file),    
+                                                 headers, HttpStatus.CREATED);    
+    } 
+    
     //教师下载作业后清楚临时文件
     @RequestMapping("teacher/clear")    
     public @ResponseBody String clear(HttpServletRequest request,HttpServletResponse response) throws IOException {  
         String term = request.getParameter("term");
-        String sn = getCurrentUsername();
-        String collage = TeacherDao.getTeacherBySn(getCurrentUsername()).getTeacherCollege();
-        String teacherName = TeacherDao.getTeacherBySn(getCurrentUsername()).getTeacherName();
-        String path = getFileFolder(request)+"uploadhomework/"+term+"/"+collage+"/"+sn+"/"+teacherName+"/"+"临时压缩";
+        String sn = AuthorityManage.getCurrentUsername();
+        String collage = TeacherDao.getTeacherBySn(AuthorityManage.getCurrentUsername()).getTeacherCollege();
+        String teacherName = TeacherDao.getTeacherBySn(AuthorityManage.getCurrentUsername()).getTeacherName();
+        String path = getFileFolder()+"uploadhomework/"+term+"/"+collage+"/"+sn+"/"+teacherName+"/"+"临时压缩";
         File f = new File(path);
         if(f.exists()&&f.isDirectory()){
             System.out.println("临时压缩文件存在----------------执行删除临时压缩文件");
@@ -1236,8 +1286,7 @@ public class TeaController {
         }
         return "0";    
     }   
-    
-  
+
      //判断目录是否存在，不存在则创建
     public boolean file(String path){
       File f = new File(path);
@@ -1345,17 +1394,8 @@ public class TeaController {
         } 
         return filename; 
     }
-    
-    public String getCurrentUsername() {
-        return SecurityContextHolder.getContext().getAuthentication().getName();
-    }
-  
-    public String getFileFolder(HttpServletRequest request) {
-        String path = this.getClass().getClassLoader().getResource("/").getPath();
-        System.out.println(path);
-        path=path.replace("build/web/WEB-INF/classes/", "build/web/file/");
-        System.out.println(path);
-        return path;        
+    public String getFileFolder() {
+        return CurrentInfo.getFileFolder();    
     }  
 }
     

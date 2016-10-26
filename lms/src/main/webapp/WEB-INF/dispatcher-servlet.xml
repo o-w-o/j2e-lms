@@ -1,4 +1,4 @@
-<?xml version='1.0' encoding='UTF-8' ?>
+<?xml version="1.0" encoding="UTF-8"?>
 <!-- was: <?xml version="1.0" encoding="UTF-8"?> -->
 <beans xmlns="http://www.springframework.org/schema/beans"
        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -18,9 +18,8 @@
     <context:annotation-config/> 
     <!--支持json转换器--> 
     <mvc:annotation-driven/>
-    <!--配置直接转发的页面不用开发控制器-->    
-    <mvc:view-controller path="/teacher" view-name="teacher"/>
-    <mvc:view-controller path="/new" view-name="new"/>
+    <!--配置直接转发的页面不用开发控制器-->  
+    <mvc:view-controller path="/teacherIndex" view-name="/teacher/Index"/>
     <context:component-scan base-package="cn.edu.henu.rjxy.*" /> 
     <mvc:resources location="/file/" mapping="/file/**" />
     <mvc:resources location="/js/" mapping="/js/**" />
@@ -30,6 +29,9 @@
     <mvc:resources location="/ueditor/" mapping="/ueditor/**" />
     <mvc:resources location="/uploadify/" mapping="/uploadify/**" />
     <mvc:resources location="/easyui/" mapping="/easyui/**" />
+    <mvc:resources location="/viewer/" mapping="/viewer/**" />
+    <mvc:resources location="/table/" mapping="/table/**" />
+    <mvc:resources location="/lib/" mapping="/lib/**" />
     <bean id="viewResolver"
           class="org.springframework.web.servlet.view.InternalResourceViewResolver"
           p:prefix="/WEB-INF/jsp/"
